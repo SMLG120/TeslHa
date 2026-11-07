@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TeslHa — Engineering the Electric Future
 
-## Getting Started
+An interactive 3D electric-vehicle showroom, engineering lab and performance-analytics platform covering Model S, Model 3, Model X, Model Y and the Roadster (both the 2008 original and the announced next generation).
 
-First, run the development server:
+> **Independent project.** TeslHa is not affiliated with, endorsed by, or sponsored by Tesla, Inc. Vehicle names are used only to identify the vehicles discussed. The TeslHa mark is original.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Features
+
+| Route | What it does |
+|---|---|
+| `/` | Cinematic 3D hero with turntable camera, vehicle switching (sink → swap → rise), paint picker, staged preload sequence, scroll storytelling, animated KPI counters |
+| `/vehicles` | Fleet showroom: every family with its real US configurations and key specs |
+| `/vehicles/[model]` | Configuration tabs, full spec grid with per-value verification badges and sources, dimensions, embedded 3D viewer |
+| `/studio/[model]` | Full-screen 3D explorer: 6 camera presets with animated transitions, orbit/zoom/pan, doors (falcon-wing on Model X), frunk/trunk, headlights, 6 paints, studio/night environments, solid/x-ray/wireframe, component overlay, turntable, generation switch for Roadster |
+| `/engineering` | Engineering Lab: 10 selectable systems with camera focus, floating technical panel, connected-system navigation, transparent/wireframe shell, exploded view, animated energy flow (drive and regenerative braking). Deep-linkable: `?component=inverter&vehicle=model-y` |
+| `/compare` | 2–5 configurations (URL-driven `?ids=`), one synchronized 3D scene at true relative scale, weighted priority scoring, per-metric charts, best-in-row table, 5-year cost vs an ICE baseline |
+| `/analytics` | KPI tiles, range / 0–60 / top speed / range-per-dollar charts, charging-cost calculator, **data coverage matrix** |
+| `/simulation` | EV vs gasoline cost & emissions simulator (12 adjustable inputs, break-even, "where gasoline wins") and an interactive powertrain energy-flow simulation |
+| `/about` | Architecture, asset pipeline, data policy, all sources, limitations |
+
+Global: metric/imperial switch, currency switch (fixed, labelled demo FX rates), reduced-motion support, keyboard-accessible controls, skip link, WebGL detection + error boundary fallback, `?q=low|medium|high` render-quality override.
+
+## Data policy (read this before trusting a number)
+
+- Specs are modelled per **exact configuration** (model year, trim, drivetrain, wheel size, market), never per model.
+- Every value is a `Spec { value, verification, sourceIds, note }`, validated with Zod at load time and in tests.
+- `verification` is one of:
+  - `manufacturer` / `regulatory`: checked against Tesla or EPA/fueleconomy.gov
+  - `secondary`: compiled from third-party reporting, **pending primary re-check**
+  - `announced-target`: claim for an unreleased vehicle (next-gen Roadster)
+- Values Tesla does not publish (e.g. usable pack capacity, most horsepower figures) are `null` with an explanatory note. **They are never estimated.**
+- Current state (verified 2026-11-07): EPA range and consumption for every current US trim come from the fueleconomy.gov API (`regulatory`, cited per EPA record). 0–60, peak power, cargo and peak DC rate shown on tesla.com are `manufacturer`. Values tesla.com does not display (most top speeds, cash MSRP, Gen 1 Roadster) stay `secondary`. Where Tesla and EPA disagree on range (Model 3 Performance 316 vs 314, Model Y Premium RWD 355 vs 357), the EPA figure is shown and Tesla's is noted.
+- Status as of 2026-11: Model S and Model X production ended in 2026. The next-gen Roadster has not entered production.
+
+## 3D asset pipeline
+
+No accurate, legally licensed production models with separable doors, interiors and drivetrain parts were available, so every vehicle is rendered by a **parametric procedural rig** (`src/components/three/`):
+
+- `vehicle-geometry.ts`: turns published dimensions and a normalised side silhouette into a metre-scale layout: axles, door spans, hood/deck hinge lines, 10 component placements with explode vectors, and camera targets.
+- `procedural-vehicle.tsx`: extruded/bevelled body and greenhouse, hinged doors (conventional, falcon, coupe), frunk/trunk lids, wheels with arch liners, emissive lights, interior, selectable components, render modes.
+- `energy-flow.tsx`: instanced particles along Catmull-Rom paths, battery → inverter → motor → wheels (reversed for regen).
+- `studio-environment.tsx`: procedural softbox environment baked once into a PMREM map (no HDR download, no per-frame cube camera).
+
+The rig is labelled **"procedural representation"** wherever it appears. Model S is the reference rig (`rigLevel: "full"`); the other families reuse it with their own proportions.
+
+**Adding a licensed model:** each family in `src/data/vehicles/families.ts` has an `asset` slot (`url`, `license`, `author`, `sourceUrl`). Compress GLBs with `gltf-transform` (Draco or Meshopt geometry, KTX2 textures), place them in `public/models/`, register them there, and render them with drei's `useGLTF` in place of `ProceduralVehicle`. Name sub-meshes after the `ComponentId`s so the selection, x-ray and explode logic keep working. Record attribution below.
+
+## Architecture
+
+```
+src/
+  app/                    routes (App Router, Cache Components + Partial Prefetching)
+  proxy.ts                rejects unknown vehicle slugs with a real 404 before render
+  components/
+    layout/               nav, footer, wordmark, unit/currency toggle
+    three/                stage (lighting, floor, post-fx, adaptive quality), camera rig, rig, env, WebGL guard
+    charts/               validated categorical palette, MetricBars
+    simulations/          cost simulator, powertrain simulation
+    ui/                   primitives, spec value + verification badge, animated number, number field
+  features/
+    showroom/             hero, studio, vehicle detail, fleet stats
+    engineering/          engineering lab
+    comparison/           compare studio + synchronized scene
+    analytics/            dashboard
+  data/
+    vehicles/             families (geometry), configurations (specs), Zod-validated index
+    components/           engineering-component content
+    sources/              every cited source with access date
+  lib/calc/               ownership (EV vs ICE), scoring, powertrain model — pure, unit-tested
+  stores/                 Zustand: studio scene state, persisted preferences
+  hooks/                  media-query hooks (reduced motion, low power)
+  types/                  Zod schemas + inferred types
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Performance:** 3D scenes are `next/dynamic({ ssr: false })` code-split. DPR is capped at 1.5 and adapted by drei's `PerformanceMonitor`, which also steps quality high → medium → low (Bloom + reflective floor → Bloom → none; N8AO was dropped because n8ao 2.0.1 crashes on three r187). Mobile/coarse pointers get reduced geometry. Geometries and materials created in hooks are disposed on unmount. Per-frame animation mutates Three objects in `useFrame` rather than React state.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Formulas (simulation)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- EV grid energy = miles × kWh/mi ÷ charging efficiency
+- Blended electricity price = home × (1 − DC share) + DC × DC share
+- ICE fuel = miles ÷ mpg; tailpipe CO₂ = 8.887 kg/gal (EPA)
+- Grid CO₂ default ≈ 0.81 lb/kWh (EIA, US average); user-adjustable
+- Maintenance defaults $0.061/mi BEV vs $0.101/mi ICE (Argonne, Burnham et al. 2021)
+- Total = purchase + years × (energy + maintenance). Excludes insurance, depreciation, financing, taxes, incentives and upstream emissions.
 
-## Learn More
+The powertrain simulation is a generic 1,900 kg / 250 kW single-motor EV longitudinal model (drag, rolling resistance, torque and power limits, regen fade). It is clearly labelled as **not calibrated** to any Tesla.
 
-To learn more about Next.js, take a look at the following resources:
+## Getting started
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev            # http://localhost:3000
+npm run check          # typecheck + lint + unit tests
+npm run build && npm start
+npx playwright install chromium   # once
+npm run test:e2e       # builds must exist; starts `next start` on :3100 if not running
+npm run screenshot -- "http://localhost:3100/?q=low" out.png 8000   # headless screenshot helper
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Requires Node 20.9+ (developed on Node 24).
 
-## Deploy on Vercel
+## Testing
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Vitest + Testing Library** (`tests/unit`): ownership-cost math, including an "ICE wins" scenario and NaN guards; scoring; procedural layout invariants for every family; powertrain physics; dataset integrity (unique ids, resolvable sources, notes on every null, announced values tagged, Roadster generations distinct); spec-rendering and WebGL fallback UI.
+- **Playwright** (`tests/e2e`): every route renders without runtime errors on desktop and mobile, a real 404 for unknown models, hero vehicle switching, studio toggles, engineering deep links, URL-driven comparison, simulator recalculation, unit switching. Uses SwiftShader so WebGL renders headless.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment (Vercel)
+
+No environment variables are required. Import the repo in Vercel and it is detected as Next.js. All routes except unknown-slug handling are prerendered, and `proxy.ts` runs on the Node runtime. Static 3D assets added later belong in `public/models` and `public/textures` (served from the CDN with immutable caching when fingerprinted).
+
+## Known limitations
+
+- Vehicle bodies are stylised approximations from published dimensions, not production surfaces. Component placement is schematic.
+- Prices and some top speeds remain `secondary`: tesla.com shows financing offers rather than a stable cash MSRP. Tesla changes trims and prices frequently, so re-verify before relying on any figure.
+- No DC charging curves yet: no dataset with documented test conditions has been added.
+- Per-trim EPA consumption (Wh/mi) is not yet in the dataset, so cost comparisons apply one assumed consumption to every EV (stated wherever it is used).
+- Currency conversion uses fixed demo rates and does not represent local market prices.
+- Dark theme only, by design of the brand.
+- shadcn/ui was not installed via its CLI. The few primitives needed are built directly on Radix (Tabs, Slider, Tooltip) with Tailwind.
+
+## Asset licensing & attribution
+
+All 3D geometry is generated procedurally at runtime by this project's code. No third-party models, textures or HDRIs are used. Fonts: Geist and Geist Mono (SIL OFL), Michroma (SIL OFL), via `next/font/google`. Icons: Lucide (ISC).
+
+## Sources
+
+See `src/data/sources/index.ts` or the `/about` page for the full, dated list (fueleconomy.gov, tesla.com, EPA, EIA, Argonne National Laboratory, and the secondary publications cited per value).

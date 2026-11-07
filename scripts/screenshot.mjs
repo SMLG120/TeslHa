@@ -1,0 +1,12 @@
+import { chromium } from "@playwright/test";
+const [,, url, out, wait = "6000", w = "1440", h = "900"] = process.argv;
+const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+const page = await browser.newPage({ viewport: { width: +w, height: +h }, reducedMotion: process.env.RM ? "reduce" : "no-preference" });
+const errors = [];
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+page.on("pageerror", (e) => errors.push("PAGEERROR " + e.message));
+await page.goto(url, { waitUntil: "networkidle" });
+await page.waitForTimeout(+wait);
+await page.screenshot({ path: out, timeout: 90000 });
+console.log(JSON.stringify(errors.slice(0, 10), null, 1));
+await browser.close();
