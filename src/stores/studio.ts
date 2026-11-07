@@ -25,6 +25,7 @@ interface StudioState {
   mode: RenderMode;
   environment: Environment;
   headlights: boolean;
+  taillights: boolean;
   doorsOpen: boolean;
   frunkOpen: boolean;
   trunkOpen: boolean;
@@ -33,9 +34,11 @@ interface StudioState {
   selected: ComponentId | null;
   flow: FlowMode;
   autoRotate: boolean;
-  set: (patch: Partial<Omit<StudioState, "set" | "setView" | "reset">>) => void;
+  set: (patch: Partial<Omit<StudioState, "set" | "setView" | "reset" | "resetVehicle">>) => void;
   setView: (v: CameraView) => void;
   reset: () => void;
+  /** Close panels and clear selection when switching vehicles; keeps paint and scene choices. */
+  resetVehicle: () => void;
 }
 
 const initial = {
@@ -45,6 +48,7 @@ const initial = {
   mode: "solid" as RenderMode,
   environment: "studio" as Environment,
   headlights: true,
+  taillights: true,
   doorsOpen: false,
   frunkOpen: false,
   trunkOpen: false,
@@ -60,4 +64,6 @@ export const useStudio = create<StudioState>()((set) => ({
   set: (patch) => set(patch),
   setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1 })),
   reset: () => set((s) => ({ ...initial, viewNonce: s.viewNonce + 1 })),
+  resetVehicle: () =>
+    set((s) => ({ doorsOpen: false, frunkOpen: false, trunkOpen: false, selected: null, exploded: false, view: "hero", viewNonce: s.viewNonce + 1 })),
 }));

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { Canvas, useThree } from "@react-three/fiber";
 import { CameraControls, ContactShadows, MeshReflectorMaterial, PerformanceMonitor } from "@react-three/drei";
@@ -127,8 +127,10 @@ function StudioLights({ night, quality }: { night: boolean; quality: Quality }) 
         shadow-camera-top={6}
         shadow-camera-bottom={-6}
       />
-      <StudioEnvironment night={night} intensity={night ? 0.4 : 1} />
-      {night && <pointLight position={[0, 0.3, -3]} color="#ff2a36" intensity={6} distance={8} />}
+      <StudioEnvironment night={night} intensity={night ? 0.45 : 1} />
+      {/* Red accent rim light from behind, the showroom's signature colour. */}
+      <spotLight position={[-5.5, 1.6, -5]} color="#ff2a36" intensity={night ? 70 : 28} angle={0.7} penumbra={1} distance={18} />
+      <spotLight position={[5.5, 1.2, -5.5]} color="#ff2a36" intensity={night ? 40 : 12} angle={0.6} penumbra={1} distance={16} />
     </>
   );
 }
@@ -136,7 +138,8 @@ function StudioLights({ night, quality }: { night: boolean; quality: Quality }) 
 function Floor({ quality, night }: { quality: Quality; night: boolean }) {
   return (
     <group>
-      <ContactShadows position={[0, 0.002, 0]} opacity={0.8} scale={14} blur={2.4} far={2.5} resolution={quality === "low" ? 256 : 1024} />
+      <ContactShadows position={[0, 0.002, 0]} opacity={0.85} scale={14} blur={2.2} far={2.2} resolution={quality === "low" ? 256 : 1024} />
+      <FloorGlow night={night} />
       <mesh rotation-x={-Math.PI / 2} position={[0, -0.001, 0]} receiveShadow>
         <circleGeometry args={[30, 64]} />
         {quality === "high" ? (
@@ -161,25 +164,71 @@ function Floor({ quality, night }: { quality: Quality; night: boolean }) {
   );
 }
 
-/** Camera presets derived from vehicle dimensions. */
-export function cameraPreset(view: CameraView, l: VehicleLayout): { pos: [number, number, number]; target: [number, number, number] } {
+/** Soft pool of light under the car, like an overhead softbox hitting a studio floor. */
+function FloorGlow({ night }: { night: boolean }) {
+  const tex = useMemo(() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 256;
+    const g = c.getContext("2d")!;
+    const grad = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+    grad.addColorStop(0, "rgba(255,255,255,0.55)");
+    grad.addColorStop(0.45, "rgba(255,255,255,0.16)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 256, 256);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
+  useEffect(() => () => tex.dispose(), [tex]);
+  return (
+    <mesh rotation-x={-Math.PI / 2} position={[0, 0.0015, 0]} scale={[1.6, 1, 1]} renderOrder={-1}>
+      <planeGeometry args={[11, 7]} />
+      <meshBasicMaterial map={tex} transparent depthWrite={false} opacity={night ? 0.12 : 0.3} toneMapped={false} />
+    </mesh>
+  );
+}
+
+const VIEW_DIRS: Record<Exclude<CameraView, "interior">, [number, number, number]> = {
+  hero: [1.15, 0.36, 1.35],
+  front: [1, 0.22, 0.0001],
+  rear: [-1, 0.24, 0.0001],
+  side: [0.0001, 0.18, 1],
+  top: [0.02, 1, 0.01],
+};
+const VIEW_MARGIN: Record<Exclude<CameraView, "interior">, number> = { hero: 1.12, front: 1.3, rear: 1.3, side: 1.08, top: 1.12 };
+
+/**
+ * Camera presets derived from vehicle dimensions: each exterior view fits the vehicle's
+ * bounding box to the actual canvas aspect and field of view, so every model is fully
+ * visible and similarly sized on any screen.
+ */
+export function cameraPreset(view: CameraView, l: VehicleLayout, aspect = 16 / 9, fovDeg = 30): { pos: [number, number, number]; target: [number, number, number] } {
   const { L, H, W, frontAxleX, rearAxleX } = l;
-  const mid = (frontAxleX + rearAxleX) / 2;
-  switch (view) {
-    case "front":
-      return { pos: [L * 1.35, H * 0.7, 0.01], target: [0, H * 0.45, 0] };
-    case "rear":
-      return { pos: [-L * 1.35, H * 0.75, 0.01], target: [0, H * 0.45, 0] };
-    case "side":
-      return { pos: [0, H * 0.6, L * 1.5], target: [0, H * 0.45, 0] };
-    case "top":
-      return { pos: [0.01, L * 1.9, 0.01], target: [0, 0, 0] };
-    case "interior":
-      return { pos: [mid - 0.1, H * 0.78, -W * 0.18], target: [L / 2, H * 0.6, -W * 0.18] };
-    case "hero":
-    default:
-      return { pos: [L * 1.3, H * 1.3, L * 1.55], target: [0, H * 0.4, 0] };
+  if (view === "interior") {
+    const mid = (frontAxleX + rearAxleX) / 2;
+    return { pos: [mid - 0.1, H * 0.74, -W * 0.18], target: [L / 2, H * 0.6, -W * 0.18] };
   }
+  const target = new THREE.Vector3(0, view === "top" ? 0 : H * 0.42, 0);
+  const dir = new THREE.Vector3(...VIEW_DIRS[view]).normalize();
+  const f = dir.clone().negate();
+  const upRef = Math.abs(f.y) > 0.98 ? new THREE.Vector3(-1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(f, upRef).normalize();
+  const up = new THREE.Vector3().crossVectors(right, f).normalize();
+  const vf = THREE.MathUtils.degToRad(fovDeg);
+  const tanV = Math.tan(vf / 2);
+  const tanH = tanV * aspect;
+  const m = VIEW_MARGIN[view];
+  let D = 0;
+  for (const x of [-L / 2, L / 2])
+    for (const y of [0, H])
+      for (const z of [-W / 2, W / 2]) {
+        const rel = new THREE.Vector3(x, y, z).sub(target);
+        const depth = rel.dot(f);
+        D = Math.max(D, (Math.abs(rel.dot(right)) * m) / tanH - depth, (Math.abs(rel.dot(up)) * m) / tanV - depth);
+      }
+  const pos = target.clone().add(dir.multiplyScalar(D));
+  return { pos: [pos.x, pos.y, pos.z], target: [target.x, target.y, target.z] };
 }
 
 /** Smoothly animated orbit camera. `focus` overrides presets (used for component selection). */
@@ -207,9 +256,8 @@ export function CameraRig({
 }) {
   const ref = useRef<CameraControls>(null);
   const [fx, fy, fz] = focalOffset ?? [0, 0, 0];
-  // Portrait viewports see less horizontally; pull preset cameras back so the car fits.
   const aspect = useThree((st) => st.size.width / Math.max(st.size.height, 1));
-  const fit = aspect < 1 ? Math.min(2.2, 1 / aspect) : 1;
+  const fov = useThree((st) => (st.camera as THREE.PerspectiveCamera).fov ?? 30);
 
   useEffect(() => {
     void ref.current?.setFocalOffset(fx, fy, fz, true);
@@ -225,11 +273,9 @@ export function CameraRig({
       void c.setLookAt(pos.x, pos.y, pos.z, focus.x, focus.y, focus.z, true);
       return;
     }
-    const p = cameraPreset(view, layout);
-    const t = new THREE.Vector3(...p.target);
-    const pos = view === "interior" ? new THREE.Vector3(...p.pos) : new THREE.Vector3(...p.pos).sub(t).multiplyScalar(fit).add(t);
-    void c.setLookAt(pos.x, pos.y, pos.z, t.x, t.y, t.z, true);
-  }, [view, nonce, layout, focus, fit]);
+    const p = cameraPreset(view, layout, aspect, fov);
+    void c.setLookAt(...p.pos, ...p.target, true);
+  }, [view, nonce, layout, focus, aspect, fov]);
 
   useEffect(() => {
     const c = ref.current;

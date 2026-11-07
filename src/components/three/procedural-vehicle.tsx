@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import { RoundedBox } from "@react-three/drei";
 import type { BodyGeometry } from "@/types/vehicle";
 import type { ComponentId } from "@/data/components";
 import { PAINTS, type FlowMode, type PaintId, type RenderMode } from "@/stores/studio";
-import { computeLayout, extrudeSilhouette, silhouettePoints, smoothSilhouette, type ComponentPlacement, type VehicleLayout } from "./vehicle-geometry";
+import { surfaceFor, type CarSurface } from "@/lib/car-design/surface";
+import { buildCar, buildWheel, type CarMeshes, type Opening, type WheelGeometries } from "./car-mesh";
+import { computeLayout, type ComponentPlacement, type VehicleLayout } from "./vehicle-geometry";
 import { EnergyFlow } from "./energy-flow";
 
 export interface ProceduralVehicleProps {
@@ -14,6 +17,7 @@ export interface ProceduralVehicleProps {
   paint?: PaintId;
   mode?: RenderMode;
   headlights?: boolean;
+  taillights?: boolean;
   doorsOpen?: boolean;
   frunkOpen?: boolean;
   trunkOpen?: boolean;
@@ -41,12 +45,18 @@ const COMPONENT_COLORS: Record<ComponentId, string> = {
 };
 
 const damp = THREE.MathUtils.damp;
+const GLASS_OPACITY = 0.92;
+
+function disposeAll(list: (THREE.BufferGeometry | THREE.Material | null | undefined)[]) {
+  list.forEach((x) => x?.dispose());
+}
 
 export function ProceduralVehicle({
   body,
   paint = "volt-red",
   mode = "solid",
   headlights = true,
+  taillights = true,
   doorsOpen = false,
   frunkOpen = false,
   trunkOpen = false,
@@ -58,336 +68,264 @@ export function ProceduralVehicle({
   motors = 2,
   lowDetail = false,
 }: ProceduralVehicleProps) {
+  const surface = surfaceFor(body);
   const layout = useMemo(() => computeLayout(body), [body]);
-  const segs = lowDetail ? 48 : 120;
+  const car = useMemo(() => buildCar(surface, lowDetail), [surface, lowDetail]);
+  const wheel = useMemo(
+    () => buildWheel(surface.wheelR, surface.tireW, surface.design.rimRatio, surface.design.rim, lowDetail),
+    [surface, lowDetail],
+  );
 
-  const geometries = useMemo(() => {
-    const bodyPts = smoothSilhouette(silhouettePoints(body, "profile"), segs);
-    const cabinPts = smoothSilhouette(silhouettePoints(body, "cabin"), segs);
-    return {
-      body: extrudeSilhouette(bodyPts, layout.W, 0.14),
-      cabin: extrudeSilhouette(cabinPts, layout.W * 0.8, 0.12),
-    };
-  }, [body, layout.W, segs]);
-
-  useEffect(() => () => Object.values(geometries).forEach((g) => g.dispose()), [geometries]);
+  useEffect(
+    () => () =>
+      disposeAll([
+        car.body,
+        car.liner,
+        car.glass,
+        car.seams,
+        car.trim,
+        car.housings,
+        car.head,
+        car.drl,
+        car.tail,
+        ...car.openings.flatMap((o) => [o.paint, o.glass, o.detail]),
+      ]),
+    [car],
+  );
+  useEffect(() => () => disposeAll(Object.values(wheel)), [wheel]);
 
   const p = PAINTS.find((x) => x.id === paint) ?? PAINTS[0];
   const xray = mode === "xray";
   const wire = mode === "wireframe";
 
-  const materials = useMemo(() => {
+  const mats = useMemo(() => {
     const paintMat = new THREE.MeshPhysicalMaterial({
       color: p.color,
       metalness: p.metalness,
       roughness: p.roughness,
       clearcoat: 1,
-      clearcoatRoughness: 0.04,
-      envMapIntensity: 1.25,
+      clearcoatRoughness: 0.03,
+      envMapIntensity: 1.35,
     });
-    const glass = new THREE.MeshPhysicalMaterial({
-      color: "#07090c",
-      metalness: 0.4,
-      roughness: 0.04,
-      clearcoat: 1,
-      transparent: true,
-      opacity: 0.55,
-      envMapIntensity: 1.6,
-    });
-    const trim = new THREE.MeshStandardMaterial({ color: "#0a0a0b", metalness: 0.3, roughness: 0.6, side: THREE.DoubleSide });
-    const tire = new THREE.MeshStandardMaterial({ color: "#111214", roughness: 0.92 });
-    const rim = new THREE.MeshStandardMaterial({ color: "#8d939c", metalness: 1, roughness: 0.22 });
-    const interior = new THREE.MeshStandardMaterial({ color: "#1a1b1e", roughness: 0.8 });
-    const screen = new THREE.MeshStandardMaterial({ color: "#0b1622", emissive: "#3aa3ff", emissiveIntensity: 0.6 });
-    return { paintMat, glass, trim, tire, rim, interior, screen };
-  }, [p.color, p.metalness, p.roughness]);
+    const paintDouble = paintMat.clone();
+    paintDouble.side = THREE.DoubleSide;
+    return {
+      paint: paintMat,
+      paintDouble,
+      under: new THREE.MeshStandardMaterial({ color: "#0b0c0e", roughness: 0.85, metalness: 0.2 }),
+      liner: new THREE.MeshStandardMaterial({ color: "#121316", roughness: 0.9, side: THREE.BackSide }),
+      glass: new THREE.MeshPhysicalMaterial({
+        color: "#0b0e13",
+        metalness: 0.3,
+        roughness: 0.03,
+        clearcoat: 1,
+        clearcoatRoughness: 0.02,
+        transparent: true,
+        opacity: GLASS_OPACITY,
+        envMapIntensity: 1.7,
+      }),
+      glassDouble: new THREE.MeshPhysicalMaterial({ color: "#0b0e13", metalness: 0.3, roughness: 0.03, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.7 }),
+      roof: new THREE.MeshPhysicalMaterial({ color: "#040506", metalness: 0.4, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.7 }),
+      seam: new THREE.MeshStandardMaterial({ color: "#050505", roughness: 0.7 }),
+      trim: new THREE.MeshPhysicalMaterial({ color: "#07080a", roughness: 0.32, metalness: 0.2, clearcoat: 0.6 }),
+      housing: new THREE.MeshPhysicalMaterial({ color: "#0c0d10", roughness: 0.08, metalness: 0.5, clearcoat: 1, envMapIntensity: 1.8 }),
+      handle: new THREE.MeshStandardMaterial({ color: "#2a2d33", metalness: 0.9, roughness: 0.3 }),
+      tire: new THREE.MeshStandardMaterial({ color: "#121315", roughness: 0.88, metalness: 0 }),
+      rim: new THREE.MeshStandardMaterial({ color: "#c9ced6", metalness: 0.85, roughness: 0.28, envMapIntensity: 1.8, side: THREE.DoubleSide }),
+      rimDark: new THREE.MeshStandardMaterial({ color: "#1b1d21", metalness: 0.6, roughness: 0.35, side: THREE.DoubleSide }),
+      disc: new THREE.MeshStandardMaterial({ color: "#6c7078", metalness: 0.9, roughness: 0.45 }),
+      caliper: new THREE.MeshStandardMaterial({ color: surface.design.caliper, metalness: 0.4, roughness: 0.4 }),
+      interior: new THREE.MeshStandardMaterial({ color: "#1b1c1f", roughness: 0.75 }),
+      seat: new THREE.MeshStandardMaterial({ color: "#26272b", roughness: 0.6 }),
+      screen: new THREE.MeshStandardMaterial({ color: "#0b1622", emissive: "#3aa3ff", emissiveIntensity: 0.55 }),
+    };
+  }, [p.color, p.metalness, p.roughness, surface.design.caliper]);
+  useEffect(() => () => disposeAll(Object.values(mats)), [mats]);
 
-  useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials]);
-
-  // Apply render mode without rebuilding materials.
+  // Render modes mutate shared materials instead of rebuilding them.
   useEffect(() => {
-    const shell = [materials.paintMat, materials.glass];
+    const shell = [mats.paint, mats.paintDouble, mats.glass, mats.glassDouble, mats.roof, mats.trim, mats.housing, mats.under];
     for (const m of shell) {
-      m.wireframe = wire;
-      m.transparent = xray || m === materials.glass;
-      m.opacity = xray ? 0.1 : m === materials.glass ? 0.55 : 1;
+      const isGlass = m === mats.glass || m === mats.glassDouble;
+      m.wireframe = wire && !isGlass;
+      m.transparent = xray || isGlass;
+      m.opacity = xray ? (isGlass ? 0.05 : 0.1) : isGlass ? GLASS_OPACITY : 1;
       m.depthWrite = !xray;
       m.needsUpdate = true;
     }
-    materials.trim.wireframe = wire;
-    materials.trim.transparent = xray;
-    materials.trim.opacity = xray ? 0.15 : 1;
-    materials.trim.needsUpdate = true;
-  }, [materials, xray, wire]);
+    mats.glass.visible = !wire;
+    mats.glassDouble.visible = !wire;
+    mats.liner.visible = !xray && !wire;
+  }, [mats, xray, wire]);
 
   const componentsVisible = showComponents || xray;
+  const openFor = (o: Opening) => (o.kind === "frunk" ? frunkOpen : o.kind === "trunk" ? trunkOpen : doorsOpen);
 
   return (
     <group>
-      <mesh geometry={geometries.body} material={materials.paintMat} castShadow receiveShadow />
-      <mesh geometry={geometries.cabin} material={materials.glass} castShadow />
+      <mesh geometry={car.body} material={[mats.paint, mats.under]} castShadow receiveShadow />
+      <mesh geometry={car.liner} material={mats.liner} />
+      <mesh geometry={car.glass} material={[mats.glass, mats.roof]} />
+      <mesh geometry={car.seams} material={mats.seam} />
+      <mesh geometry={car.trim} material={mats.trim} />
+      <mesh geometry={car.housings} material={mats.housing} />
+      <Lamps car={car} surface={surface} headlights={headlights} taillights={taillights} />
 
-      <Underbody layout={layout} material={materials.trim} />
-      <Lights layout={layout} on={headlights} />
-      {/* The interior would occlude components in x-ray / engineering views. */}
-      {!lowDetail && !componentsVisible && <Interior layout={layout} materials={materials} />}
+      {car.openings.map((o, i) => (
+        <OpeningPanel key={i} opening={o} open={openFor(o)} paint={mats.paintDouble} glass={mats.glassDouble} detail={mats.handle} />
+      ))}
 
-      <Doors layout={layout} style={body.doorStyle} open={doorsOpen} material={materials.paintMat} trim={materials.trim} />
-      {body.hasFrunk && <Lid layout={layout} which="hood" open={frunkOpen} material={materials.paintMat} />}
-      <Lid layout={layout} which="deck" open={trunkOpen} material={materials.paintMat} />
+      <Mirrors car={car} paint={mats.paint} trim={mats.trim} />
+      <WheelWells layout={layout} material={mats.under} />
+      <Wheels layout={layout} geo={wheel} mats={mats} spinning={flow} />
 
-      <Wheels layout={layout} tire={materials.tire} rim={materials.rim} trim={materials.trim} spinning={flow} lowDetail={lowDetail} />
+      {!lowDetail && !componentsVisible && <Interior surface={surface} mats={mats} />}
 
-      {componentsVisible && (
-        <Components layout={layout} exploded={exploded} selected={selected} onSelect={onSelect} motors={motors} />
-      )}
+      {componentsVisible && <Components layout={layout} exploded={exploded} selected={selected} onSelect={onSelect} motors={motors} />}
       {flow !== "off" && <EnergyFlow layout={layout} mode={flow} motors={motors} />}
     </group>
   );
 }
 
-function Underbody({ layout, material }: { layout: VehicleLayout; material: THREE.Material }) {
-  const { L, W, H } = layout;
-  return (
-    <group>
-      {/* Front fascia intake and rear diffuser read as dark trim. */}
-      <mesh position={[L / 2 - 0.02, H * 0.2, 0]} material={material}>
-        <boxGeometry args={[0.06, H * 0.08, W * 0.6]} />
-      </mesh>
-      <mesh position={[-L / 2 + 0.03, H * 0.17, 0]} material={material}>
-        <boxGeometry args={[0.08, H * 0.07, W * 0.72]} />
-      </mesh>
-    </group>
-  );
-}
-
-function Lights({ layout, on }: { layout: VehicleLayout; on: boolean }) {
-  const { L, W, H } = layout;
-  const mats = useMemo(
+function Lamps({ car, surface, headlights, taillights }: { car: CarMeshes; surface: CarSurface; headlights: boolean; taillights: boolean }) {
+  const lamp = useMemo(
     () => ({
-      head: new THREE.MeshStandardMaterial({ color: "#ffffff", emissive: "#dfefff", emissiveIntensity: 6, toneMapped: false }),
-      tail: new THREE.MeshStandardMaterial({ color: "#300", emissive: "#ff1a24", emissiveIntensity: 4, toneMapped: false }),
+      head: new THREE.MeshStandardMaterial({ color: "#f4f8ff", emissive: "#e3eeff", emissiveIntensity: 5, toneMapped: false, roughness: 0.2 }),
+      tail: new THREE.MeshStandardMaterial({ color: "#3a0507", emissive: "#ff1a24", emissiveIntensity: 3.5, toneMapped: false, roughness: 0.25 }),
     }),
     [],
   );
-  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  useEffect(() => () => disposeAll(Object.values(lamp)), [lamp]);
   useFrame((_, dt) => {
-    mats.head.emissiveIntensity = damp(mats.head.emissiveIntensity, on ? 6 : 0.05, 6, dt);
-    mats.tail.emissiveIntensity = damp(mats.tail.emissiveIntensity, on ? 4 : 0.3, 6, dt);
+    lamp.head.emissiveIntensity = damp(lamp.head.emissiveIntensity, headlights ? 5 : 0.02, 6, dt);
+    lamp.head.color.lerp(new THREE.Color(headlights ? "#f4f8ff" : "#30343a"), Math.min(1, dt * 6));
+    lamp.tail.emissiveIntensity = damp(lamp.tail.emissiveIntensity, taillights ? 3.5 : 0.12, 6, dt);
   });
+
+  const d = surface.design;
+  const h = d.lights.head[0];
+  const hp = surface.body((h.t[0] + h.t[1]) / 2, (h.u[0] + h.u[1]) / 2);
   const target = useMemo(() => {
     const o = new THREE.Object3D();
-    o.position.set(L / 2 + 6, 0, 0);
+    o.position.set(hp[0] + 8, 0, 0);
     return o;
-  }, [L]);
+  }, [hp[0]]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <group>
-      {[1, -1].map((side) => (
-        <mesh key={side} material={mats.head} position={[L / 2 - 0.05, H * 0.46, side * W * 0.33]} rotation={[0, side * 0.35, 0]}>
-          <boxGeometry args={[0.04, 0.035, W * 0.2]} />
-        </mesh>
-      ))}
-      <mesh material={mats.tail} position={[-L / 2 + 0.02, H * 0.5, 0]}>
-        <boxGeometry args={[0.03, 0.025, W * 0.86]} />
-      </mesh>
+      <mesh geometry={car.head} material={lamp.head} />
+      {car.drl && <mesh geometry={car.drl} material={lamp.head} />}
+      <mesh geometry={car.tail} material={lamp.tail} />
       <primitive object={target} />
-      {on && <spotLight position={[L / 2 + 0.1, H * 0.46, 0]} target={target} angle={0.5} penumbra={0.8} intensity={30} distance={14} color="#e6f0ff" />}
+      {headlights &&
+        [1, -1].map((side) => (
+          <spotLight
+            key={side}
+            position={[hp[0] + 0.05, hp[1], hp[2] * side]}
+            target={target}
+            angle={0.45}
+            penumbra={0.85}
+            intensity={18}
+            distance={12}
+            color="#e6f0ff"
+          />
+        ))}
     </group>
   );
 }
 
-function Interior({ layout, materials }: { layout: VehicleLayout; materials: Record<string, THREE.Material> }) {
-  const { W, beltY, frontAxleX, rearAxleX, H } = layout;
-  const mid = (frontAxleX + rearAxleX) / 2;
-  const seatY = H * 0.3;
-  const seats: [number, number][] = [
-    [mid + 0.25, W * 0.2],
-    [mid + 0.25, -W * 0.2],
-    [mid - 0.55, W * 0.2],
-    [mid - 0.55, -W * 0.2],
-  ];
+function OpeningPanel({ opening, open, paint, glass, detail }: { opening: Opening; open: boolean; paint: THREE.Material; glass: THREE.Material; detail: THREE.Material }) {
+  const ref = useRef<THREE.Group>(null);
+  const [hx, hy, hz] = opening.hinge;
+  useFrame((_, dt) => {
+    const g = ref.current;
+    if (!g) return;
+    const target = open ? opening.angle : 0;
+    g.rotation[opening.axis] = damp(g.rotation[opening.axis], target, 3.6, dt);
+  });
+  return (
+    <group ref={ref} position={[hx, hy, hz]}>
+      <group position={[-hx, -hy, -hz]}>
+        <mesh geometry={opening.paint} material={paint} castShadow />
+        {opening.glass && <mesh geometry={opening.glass} material={glass} />}
+        {opening.detail && <mesh geometry={opening.detail} material={detail} />}
+      </group>
+    </group>
+  );
+}
+
+function Mirrors({ car, paint, trim }: { car: CarMeshes; paint: THREE.Material; trim: THREE.Material }) {
   return (
     <group>
-      {seats.map(([x, z], i) => (
-        <group key={i} position={[x, seatY, z]}>
-          <mesh material={materials.interior} position={[0, 0.05, 0]}>
-            <boxGeometry args={[0.45, 0.1, 0.45]} />
+      {car.mirrors.map(({ position, side }) => (
+        <group key={side} position={position}>
+          <mesh material={paint} scale={[0.055, 0.045, 0.095]} castShadow>
+            <sphereGeometry args={[1, 24, 16]} />
           </mesh>
-          <mesh material={materials.interior} position={[-0.22, 0.32, 0]} rotation={[0, 0, -0.18]}>
-            <boxGeometry args={[0.1, 0.55, 0.44]} />
+          <mesh material={trim} position={[-0.012, -0.004, 0]} scale={[0.047, 0.038, 0.085]}>
+            <sphereGeometry args={[1, 20, 12]} />
+          </mesh>
+          <mesh material={trim} position={[0.02, -0.03, -side * 0.08]} rotation={[side * 0.5, 0, 0]}>
+            <boxGeometry args={[0.05, 0.02, 0.09]} />
           </mesh>
         </group>
       ))}
-      <mesh material={materials.interior} position={[mid + 0.85, beltY - 0.08, 0]}>
-        <boxGeometry args={[0.35, 0.14, W * 0.82]} />
-      </mesh>
-      <mesh material={materials.screen} position={[mid + 0.68, beltY + 0.06, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[0.38, 0.24]} />
-      </mesh>
-      <mesh material={materials.trim} position={[mid + 0.68, beltY + 0.02, -W * 0.2]} rotation={[0, Math.PI / 2, 0.35]}>
-        <torusGeometry args={[0.17, 0.018, 12, 40]} />
-      </mesh>
     </group>
   );
 }
 
-function Doors({
-  layout,
-  style,
-  open,
-  material,
-  trim,
-}: {
-  layout: VehicleLayout;
-  style: BodyGeometry["doorStyle"];
-  open: boolean;
-  material: THREE.Material;
-  trim: THREE.Material;
-}) {
-  const { W, doorSpan, H } = layout;
-  const { x0, x1, y0, y1 } = doorSpan;
-  const h = y1 - y0;
-  const midX = (x0 + x1) / 2;
-  const panels: { from: number; to: number; falcon: boolean }[] =
-    style === "coupe"
-      ? [{ from: x0 + (x1 - x0) * 0.25, to: x1, falcon: false }]
-      : [
-          { from: midX + 0.02, to: x1, falcon: false },
-          { from: x0, to: midX - 0.02, falcon: style === "falcon" },
-        ];
-
+/**
+ * Wheel-well liners: a half-cylinder that follows the arch cut-out (so it can never poke through
+ * the hood) plus inner half-disc walls, so the arches read as openings rather than see-through gaps.
+ */
+function WheelWells({ layout, material }: { layout: VehicleLayout; material: THREE.Material }) {
+  const { surface: s, W, tireW } = layout;
+  const inner = W / 2 - 0.045 - tireW - 0.02;
+  const r = s.archR - 0.012;
+  const geo = useMemo(() => {
+    const shell = new THREE.CylinderGeometry(r, r, inner * 2 + tireW * 2 + 0.06, 40, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2);
+    const wall = new THREE.CircleGeometry(r, 40, 0, Math.PI);
+    return { shell, wall };
+  }, [r, inner, tireW]);
+  useEffect(() => () => disposeAll([geo.shell, geo.wall]), [geo]);
+  const wellMat = useMemo(() => {
+    const m = (material as THREE.MeshStandardMaterial).clone();
+    m.side = THREE.DoubleSide;
+    return m;
+  }, [material]);
+  useEffect(() => () => wellMat.dispose(), [wellMat]);
   return (
     <group>
-      {panels.map((panel, i) =>
-        [1, -1].map((side) => (
-          <DoorPanel
-            key={`${i}-${side}`}
-            side={side}
-            from={panel.from}
-            to={panel.to}
-            y0={y0}
-            h={panel.falcon ? H - y0 - 0.02 : h}
-            z={side * (W / 2 + 0.004)}
-            falcon={panel.falcon}
-            open={open}
-            material={material}
-            trim={trim}
-          />
-        )),
-      )}
-    </group>
-  );
-}
-
-function DoorPanel({
-  side,
-  from,
-  to,
-  y0,
-  h,
-  z,
-  falcon,
-  open,
-  material,
-  trim,
-}: {
-  side: number;
-  from: number;
-  to: number;
-  y0: number;
-  h: number;
-  z: number;
-  falcon: boolean;
-  open: boolean;
-  material: THREE.Material;
-  trim: THREE.Material;
-}) {
-  const ref = useRef<THREE.Group>(null);
-  const len = to - from;
-  useFrame((_, dt) => {
-    if (!ref.current) return;
-    if (falcon) {
-      // Falcon-wing: hinge along the roof line, swings up and out around X.
-      ref.current.rotation.x = damp(ref.current.rotation.x, open ? -side * 1.25 : 0, 4, dt);
-    } else {
-      // Conventional: hinge at the front edge, swings outward around Y.
-      ref.current.rotation.y = damp(ref.current.rotation.y, open ? side * 1.05 : 0, 4, dt);
-    }
-  });
-
-  if (falcon) {
-    const hingeY = y0 + h;
-    return (
-      <group ref={ref} position={[(from + to) / 2, hingeY, z - side * 0.25]}>
-        <mesh material={material} position={[0, -h / 2, side * 0.25]} castShadow>
-          <boxGeometry args={[len, h, 0.02]} />
-        </mesh>
-        <mesh material={trim} position={[0, -h / 2, side * 0.262]}>
-          <boxGeometry args={[len + 0.01, 0.006, 0.004]} />
-        </mesh>
-      </group>
-    );
-  }
-  return (
-    <group ref={ref} position={[to, y0, z]}>
-      <mesh material={material} position={[-len / 2, h / 2, 0]} castShadow>
-        <boxGeometry args={[len, h, 0.02]} />
-      </mesh>
-      {/* Panel gap lines + flush handle */}
-      <mesh material={trim} position={[-len, h / 2, side * 0.011]}>
-        <boxGeometry args={[0.006, h, 0.004]} />
-      </mesh>
-      <mesh material={trim} position={[-len * 0.25, h * 0.78, side * 0.012]}>
-        <boxGeometry args={[0.16, 0.018, 0.006]} />
-      </mesh>
-    </group>
-  );
-}
-
-function Lid({ layout, which, open, material }: { layout: VehicleLayout; which: "hood" | "deck"; open: boolean; material: THREE.Material }) {
-  const ref = useRef<THREE.Group>(null);
-  const seg = layout[which];
-  const len = seg.from.distanceTo(seg.to);
-  const angle = Math.atan2(seg.to.y - seg.from.y, seg.to.x - seg.from.x);
-  // Hood hinges at the windshield end; deck lid hinges at the rear-glass end.
-  const hinge = which === "hood" ? seg.to : seg.from;
-  const mid = seg.from.clone().add(seg.to).multiplyScalar(0.5).sub(hinge);
-  const openAngle = which === "hood" ? 0.9 : -0.9;
-  useFrame((_, dt) => {
-    if (ref.current) ref.current.rotation.z = damp(ref.current.rotation.z, open ? openAngle : 0, 4, dt);
-  });
-  return (
-    <group ref={ref} position={[hinge.x, hinge.y + 0.014, 0]}>
-      <mesh material={material} position={[mid.x, mid.y, 0]} rotation={[0, 0, angle]} castShadow>
-        <boxGeometry args={[len, 0.02, layout.W * 0.74]} />
-      </mesh>
+      {[s.frontAxleX, s.rearAxleX].map((x) => (
+        <group key={x} position={[x, s.wheelR, 0]}>
+          <mesh geometry={geo.shell} material={wellMat} />
+          <mesh geometry={geo.wall} material={wellMat} position={[0, 0, inner]} />
+          <mesh geometry={geo.wall} material={wellMat} position={[0, 0, -inner]} />
+        </group>
+      ))}
     </group>
   );
 }
 
 function Wheels({
   layout,
-  tire,
-  rim,
-  trim,
+  geo,
+  mats,
   spinning,
-  lowDetail,
 }: {
   layout: VehicleLayout;
-  tire: THREE.Material;
-  rim: THREE.Material;
-  trim: THREE.Material;
+  geo: WheelGeometries;
+  mats: Record<string, THREE.Material>;
   spinning: FlowMode;
-  lowDetail: boolean;
 }) {
   const { frontAxleX, rearAxleX, wheelR, tireW, W } = layout;
   const spin = useRef<THREE.Group[]>([]);
   useFrame((_, dt) => {
-    const v = spinning === "drive" ? -6 : spinning === "regen" ? -3 : 0;
-    spin.current.forEach((g) => g && (g.rotation.z += v * dt));
+    const v = spinning === "drive" ? 6 : spinning === "regen" ? 3 : 0;
+    spin.current.forEach((g) => g && (g.rotation.z -= v * dt));
   });
-  const spokes = lowDetail ? 0 : 5;
-  const positions: [number, number][] = [
+  const z = W / 2 - tireW / 2 - 0.045;
+  const positions: [number, 1 | -1][] = [
     [frontAxleX, 1],
     [frontAxleX, -1],
     [rearAxleX, 1],
@@ -396,29 +334,50 @@ function Wheels({
   return (
     <group>
       {positions.map(([x, side], i) => (
-        <group key={i} position={[x, wheelR, side * (W / 2 - tireW / 2 + 0.02)]}>
-          {/* Wheel-arch liner: a dark disc behind the tyre reads as the arch opening. */}
-          <mesh position={[0, 0.02, side * (tireW / 2 - 0.012)]} material={trim}>
-            <circleGeometry args={[wheelR * 1.12, 40, 0, Math.PI]} />
-          </mesh>
-          <group ref={(g) => { if (g) spin.current[i] = g; }}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} material={tire} castShadow>
-              <cylinderGeometry args={[wheelR, wheelR, tireW, lowDetail ? 24 : 48]} />
-            </mesh>
-            <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, side * 0.006]} material={rim}>
-              <cylinderGeometry args={[wheelR * 0.68, wheelR * 0.68, tireW + 0.004, lowDetail ? 24 : 48]} />
-            </mesh>
-            {Array.from({ length: spokes }).map((_, s) => (
-              <mesh key={s} rotation={[0, 0, (s / spokes) * Math.PI * 2]} position={[0, 0, side * (tireW / 2 + 0.006)]} material={trim}>
-                <boxGeometry args={[wheelR * 1.15, 0.035, 0.012]} />
-              </mesh>
-            ))}
-            <mesh position={[0, 0, side * (tireW / 2 + 0.01)]} rotation={[Math.PI / 2, 0, 0]} material={trim}>
-              <cylinderGeometry args={[wheelR * 0.14, wheelR * 0.14, 0.01, 24]} />
-            </mesh>
+        <group key={i} position={[x, wheelR, side * z]} rotation={[0, side === 1 ? 0 : Math.PI, 0]}>
+          <mesh geometry={geo.caliper} material={mats.caliper} />
+          <group ref={(g) => void (g && (spin.current[i] = g))}>
+            <mesh geometry={geo.tire} material={mats.tire} castShadow />
+            <mesh geometry={geo.barrel} material={mats.rimDark} />
+            <mesh geometry={geo.face} material={mats.rim} castShadow />
+            <mesh geometry={geo.accent} material={mats.rimDark} />
+            <mesh geometry={geo.disc} material={mats.disc} />
           </group>
         </group>
       ))}
+    </group>
+  );
+}
+
+function Interior({ surface: s, mats }: { surface: CarSurface; mats: Record<string, THREE.Material> }) {
+  const d = s.design;
+  const g0 = s.glass[0];
+  const dashX = s.xAt(g0) - 0.32;
+  const belt = s.beltAt(g0 + 0.05);
+  const floor = d.groundClearance + 0.14;
+  const rows = Array.from({ length: d.seatRows }, (_, r) => dashX - 0.62 - r * 0.86);
+  const seatZ = s.W * 0.2;
+  // Seats scale down under low rooflines (roadsters) so they never poke through the glass.
+  const fit = (x: number) => Math.min(1, Math.max(0.55, (s.roofAt(s.tAt(x - 0.3)) - floor - 0.12) / 0.98));
+  return (
+    <group>
+      {rows.flatMap((x, r) =>
+        [1, -1].map((side) => (
+          <group key={`${r}-${side}`} position={[x, floor, side * seatZ]} scale={[1, fit(x), 1]}>
+            <RoundedBox args={[0.5, 0.12, 0.48]} radius={0.04} position={[0, 0.16, 0]} material={mats.seat} />
+            <RoundedBox args={[0.12, 0.6, 0.46]} radius={0.04} position={[-0.25, 0.48, 0]} rotation={[0, 0, -0.2]} material={mats.seat} />
+            <RoundedBox args={[0.1, 0.16, 0.26]} radius={0.04} position={[-0.33, 0.86, 0]} rotation={[0, 0, -0.2]} material={mats.seat} />
+          </group>
+        )),
+      )}
+      <RoundedBox args={[0.42, 0.12, s.W * 0.8]} radius={0.04} position={[dashX, belt - 0.12, 0]} material={mats.interior} />
+      <mesh material={mats.screen} position={[dashX - 0.2, belt + 0.02, 0]} rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[0.38, 0.24]} />
+      </mesh>
+      <mesh material={mats.trim} position={[dashX - 0.26, belt - 0.04, -seatZ]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.17, 0.018, 12, 40]} />
+      </mesh>
+      <RoundedBox args={[1.2, 0.18, 0.2]} radius={0.05} position={[dashX - 0.9, floor + 0.12, 0]} material={mats.interior} />
     </group>
   );
 }

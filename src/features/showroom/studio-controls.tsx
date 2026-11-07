@@ -1,11 +1,12 @@
 "use client";
 
-import { Camera, CarFront, DoorOpen, Lightbulb, Moon, RotateCcw, Rotate3d, ScanEye, Sun } from "lucide-react";
+import { CarFront, DoorOpen, Layers, Lightbulb, Moon, Rotate3d, ScanEye, Sun, Zap } from "lucide-react";
 import { PAINTS, useStudio, type CameraView, type RenderMode } from "@/stores/studio";
+import { COMPONENTS } from "@/data/components";
 import { cn } from "@/lib/utils";
 import type { BodyGeometry } from "@/types/vehicle";
 
-const VIEWS: { id: CameraView; label: string }[] = [
+export const VIEWS: { id: CameraView; label: string }[] = [
   { id: "hero", label: "3/4" },
   { id: "front", label: "Front" },
   { id: "side", label: "Side" },
@@ -15,15 +16,29 @@ const VIEWS: { id: CameraView; label: string }[] = [
 ];
 
 const MODES: { id: RenderMode; label: string }[] = [
-  { id: "solid", label: "Solid" },
+  { id: "solid", label: "Paint" },
   { id: "xray", label: "X-ray" },
   { id: "wireframe", label: "Wire" },
 ];
 
-export function Segmented<T extends string>({ label, options, value, onChange }: { label: string; options: { id: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+export function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  hideLabel = false,
+  className,
+}: {
+  label: string;
+  options: { id: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  hideLabel?: boolean;
+  className?: string;
+}) {
   return (
-    <div>
-      <p className="hud-label mb-2">{label}</p>
+    <div className={className}>
+      {!hideLabel && <p className="hud-label mb-2">{label}</p>}
       <div role="radiogroup" aria-label={label} className="grid auto-cols-fr grid-flow-col gap-1 rounded-xl bg-white/[0.04] p-1 ring-1 ring-white/10">
         {options.map((o) => (
           <button
@@ -52,7 +67,7 @@ export function Toggle({ label, icon: Icon, on, onChange, disabled, hint }: { la
       title={hint}
       onClick={() => onChange(!on)}
       className={cn(
-        "flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs ring-1 ring-white/10 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-35",
+        "flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs ring-1 ring-white/10 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-35",
         on ? "bg-volt/15 text-white ring-volt/40" : "text-fog",
       )}
     >
@@ -62,17 +77,25 @@ export function Toggle({ label, icon: Icon, on, onChange, disabled, hint }: { la
   );
 }
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="hud-label mb-2.5">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/** Customisation panel. Every control here is wired to the procedural rig; unsupported ones are disabled with a reason. */
 export function StudioControls({ body }: { body: BodyGeometry }) {
   const s = useStudio();
-  const doorLabel = body.doorStyle === "falcon" ? "Doors (falcon-wing)" : "Doors";
+  const paint = PAINTS.find((p) => p.id === s.paint)!;
+  const doorLabel = body.doorStyle === "falcon" ? "Doors (falcon-wing)" : body.doorStyle === "coupe" ? "Doors" : "Doors";
+  const inspecting = s.showComponents || s.mode === "xray";
   return (
-    <div className="space-y-5">
-      <Segmented label="Camera" options={VIEWS} value={s.view} onChange={(v) => s.setView(v)} />
-      <Segmented label="Render mode" options={MODES} value={s.mode} onChange={(mode) => s.set({ mode })} />
-
-      <div>
-        <p className="hud-label mb-2">Paint</p>
-        <div role="radiogroup" aria-label="Paint" className="flex flex-wrap gap-2">
+    <div className="space-y-6">
+      <Section title="Paint">
+        <div role="radiogroup" aria-label="Paint" className="flex flex-wrap gap-2.5">
           {PAINTS.map((p) => (
             <button
               key={p.id}
@@ -82,15 +105,15 @@ export function StudioControls({ body }: { body: BodyGeometry }) {
               aria-label={p.label}
               title={p.label}
               onClick={() => s.set({ paint: p.id })}
-              className={cn("h-8 w-8 rounded-full ring-1 ring-white/20 transition", s.paint === p.id && "ring-2 ring-white ring-offset-2 ring-offset-carbon")}
-              style={{ background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 45%), ${p.color}` }}
+              className={cn("h-9 w-9 rounded-full ring-1 ring-white/20 transition hover:scale-105", s.paint === p.id && "ring-2 ring-white ring-offset-2 ring-offset-carbon")}
+              style={{ background: `radial-gradient(circle at 30% 28%, rgba(255,255,255,.45), transparent 46%), ${p.color}` }}
             />
           ))}
         </div>
-      </div>
+        <p className="mt-2 text-xs text-mist">{paint.label}</p>
+      </Section>
 
-      <div>
-        <p className="hud-label mb-2">Vehicle</p>
+      <Section title="Body & lights">
         <div className="grid grid-cols-2 gap-2">
           <Toggle label={doorLabel} icon={DoorOpen} on={s.doorsOpen} onChange={(doorsOpen) => s.set({ doorsOpen })} />
           <Toggle
@@ -99,31 +122,51 @@ export function StudioControls({ body }: { body: BodyGeometry }) {
             on={s.frunkOpen}
             onChange={(frunkOpen) => s.set({ frunkOpen })}
             disabled={!body.hasFrunk}
-            hint={body.hasFrunk ? undefined : "This body has no front trunk in the representation."}
+            hint={body.hasFrunk ? undefined : "This vehicle has no front trunk."}
           />
-          <Toggle label="Trunk" icon={CarFront} on={s.trunkOpen} onChange={(trunkOpen) => s.set({ trunkOpen })} />
+          <Toggle label={body.design === "model-3" || body.design.startsWith("roadster") ? "Trunk" : "Liftgate"} icon={CarFront} on={s.trunkOpen} onChange={(trunkOpen) => s.set({ trunkOpen })} />
           <Toggle label="Headlights" icon={Lightbulb} on={s.headlights} onChange={(headlights) => s.set({ headlights })} />
+          <Toggle label="Taillights" icon={Zap} on={s.taillights} onChange={(taillights) => s.set({ taillights })} />
+          <Toggle label="Turntable" icon={Rotate3d} on={s.autoRotate} onChange={(autoRotate) => s.set({ autoRotate })} />
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <p className="hud-label mb-2">Environment</p>
+      <Section title="Scene">
         <div className="grid grid-cols-2 gap-2">
           <Toggle label="Studio" icon={Sun} on={s.environment === "studio"} onChange={() => s.set({ environment: "studio" })} />
           <Toggle label="Night" icon={Moon} on={s.environment === "night"} onChange={() => s.set({ environment: "night" })} />
-          <Toggle label="Components" icon={ScanEye} on={s.showComponents} onChange={(showComponents) => s.set({ showComponents })} />
-          <Toggle label="Turntable" icon={Rotate3d} on={s.autoRotate} onChange={(autoRotate) => s.set({ autoRotate })} />
         </div>
-      </div>
+      </Section>
 
-      <div className="flex gap-2">
-        <button type="button" onClick={() => s.setView(s.view)} className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs text-fog ring-1 ring-white/10 hover:bg-white/5">
-          <Camera className="h-4 w-4" aria-hidden="true" /> Recenter
-        </button>
-        <button type="button" onClick={() => s.reset()} className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-xs text-fog ring-1 ring-white/10 hover:bg-white/5">
-          <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset all
-        </button>
-      </div>
+      <Section title="Engineering">
+        <Segmented label="Render mode" hideLabel options={MODES} value={s.mode} onChange={(mode) => s.set({ mode })} />
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Toggle label="Components" icon={ScanEye} on={s.showComponents} onChange={(showComponents) => s.set({ showComponents, selected: showComponents ? s.selected : null })} />
+          <Toggle label="Exploded" icon={Layers} on={s.exploded} onChange={(exploded) => s.set({ exploded, showComponents: s.showComponents || exploded })} />
+        </div>
+        {inspecting && (
+          <div className="mt-3">
+            <p className="mb-2 text-[11px] text-mist">Select a component to focus the camera on it.</p>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Inspect component">
+              {COMPONENTS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={s.selected === c.id}
+                  onClick={() => s.set({ selected: s.selected === c.id ? null : c.id })}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[11px] ring-1 ring-white/10 transition hover:text-white",
+                    s.selected === c.id ? "bg-volt/20 text-white ring-volt/50" : "text-fog",
+                  )}
+                >
+                  {c.shortName}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

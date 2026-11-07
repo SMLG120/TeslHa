@@ -34,16 +34,19 @@ Global: metric/imperial switch, currency switch (fixed, labelled demo FX rates),
 
 ## 3D asset pipeline
 
-No accurate, legally licensed production models with separable doors, interiors and drivetrain parts were available, so every vehicle is rendered by a **parametric procedural rig** (`src/components/three/`):
+No accurate, legally licensed production models with separable doors, interiors and drivetrain parts were available, so **no third-party GLBs are used**. Every vehicle is generated at runtime by a parametric car-design system. It is labelled **"procedural representation · not manufacturer CAD"** wherever a car appears.
 
-- `vehicle-geometry.ts`: turns published dimensions and a normalised side silhouette into a metre-scale layout: axles, door spans, hood/deck hinge lines, 10 component placements with explode vectors, and camera targets.
-- `procedural-vehicle.tsx`: extruded/bevelled body and greenhouse, hinged doors (conventional, falcon, coupe), frunk/trunk lids, wheels with arch liners, emissive lights, interior, selectable components, render modes.
+- `src/lib/car-design/designs.ts`: one `CarDesign` per body (Model S, Model 3, Model X, Model Y, Roadster 2008, Roadster next-gen). Each design has curves for the beltline/hood/deck, the roof, plan-view width and section shape (superellipse exponents), plus nose/tail closure, door cut lines, frunk/trunk and liftback flags, light shapes, wheel style and seat rows.
+- `src/lib/car-design/surface.ts`: pure-TypeScript lofted surface built from published length, width, height, wheelbase and wheel size. Monotone cubic curves, superellipse cross-sections, wheel-arch cut-outs and a separate greenhouse with tumblehome. Also produces the side profile for the SVG thumbnails, so the model selector always matches the 3D car.
+- `src/components/three/car-mesh.ts`: turns the surface into grid meshes, including paint/underside groups, the glass with a black roof panel, openings cut from the body (doors, falcon-wing doors, frunk, trunk/liftgate), seams, lamps, mirrors, the charge port and lathe-turned wheels in five rim styles.
+- `src/components/three/procedural-vehicle.tsx`: materials (clear-coat paint, tinted glass), render modes (paint / x-ray / wireframe), hinged openings with damped motion, head/tail lamps with spotlights, wheel wells, interior and selectable components.
+- `src/components/three/vehicle-geometry.ts`: component placements, explode vectors and camera targets derived from the surface.
+- `src/components/three/stage.tsx`: aspect-aware camera presets (3/4, front, side, rear, top, interior), contact shadows, floor glow and red rim lights. `studio-environment.tsx` bakes the overhead softboxes, flank strips and red accent wall into a PMREM map once (no HDR download).
 - `energy-flow.tsx`: instanced particles along Catmull-Rom paths, battery → inverter → motor → wheels (reversed for regen).
-- `studio-environment.tsx`: procedural softbox environment baked once into a PMREM map (no HDR download, no per-frame cube camera).
 
-The rig is labelled **"procedural representation"** wherever it appears. Model S is the reference rig (`rigLevel: "full"`); the other families reuse it with their own proportions.
+`tests/unit/car-design.test.ts` checks that each design stays within its published length, width and height, that the wheels clear the arches, that the greenhouse stays inside the body, and that every mesh, including each opening state, builds without NaNs.
 
-**Adding a licensed model:** each family in `src/data/vehicles/families.ts` has an `asset` slot (`url`, `license`, `author`, `sourceUrl`). Compress GLBs with `gltf-transform` (Draco or Meshopt geometry, KTX2 textures), place them in `public/models/`, register them there, and render them with drei's `useGLTF` in place of `ProceduralVehicle`. Name sub-meshes after the `ComponentId`s so the selection, x-ray and explode logic keep working. Record attribution below.
+**Adding a licensed model (not wired yet):** each family in `src/data/vehicles/families.ts` has an `asset` slot (`url`, `license`, `author`, `sourceUrl`). Compress GLBs with `gltf-transform` (Draco or Meshopt geometry, KTX2 textures), place them in `public/models/`, register them there, and render them with drei's `useGLTF` in place of `ProceduralVehicle`. Name sub-meshes after the `ComponentId`s so the selection, x-ray and explode logic keep working. Record the licence (CC-BY, CC0 or a commercial licence that permits redistribution in a public web app) and attribution below. `next.config.ts` already serves `/models`, `/textures` and `/environments` with long cache headers, so use versioned file names.
 
 ## Architecture
 
@@ -102,15 +105,29 @@ Requires Node 20.9+ (developed on Node 24).
 ## Testing
 
 - **Vitest + Testing Library** (`tests/unit`): ownership-cost math, including an "ICE wins" scenario and NaN guards; scoring; procedural layout invariants for every family; powertrain physics; dataset integrity (unique ids, resolvable sources, notes on every null, announced values tagged, Roadster generations distinct); spec-rendering and WebGL fallback UI.
-- **Playwright** (`tests/e2e`): every route renders without runtime errors on desktop and mobile, a real 404 for unknown models, hero vehicle switching, studio toggles, engineering deep links, URL-driven comparison, simulator recalculation, unit switching. Uses SwiftShader so WebGL renders headless.
+- **Playwright** (`tests/e2e`): every route renders without runtime errors on desktop and mobile, a real 404 for unknown models, hero vehicle switching, studio toggles and camera views, in-studio model switching, engineering deep links, URL-driven comparison, simulator recalculation, unit switching. Uses SwiftShader so WebGL renders headless.
 
-## Deployment (Vercel)
+## Deployment (Render)
 
-No environment variables are required. Import the repo in Vercel and it is detected as Next.js. All routes except unknown-slug handling are prerendered, and `proxy.ts` runs on the Node runtime. Static 3D assets added later belong in `public/models` and `public/textures` (served from the CDN with immutable caching when fingerprinted).
+Live at **https://teslha.onrender.com** (Render free web service, created from `render.yaml`).
+
+- `render.yaml`: Node 24, `npm ci && npm run build`, then `npm start`. Health check at `/api/health`. Deploys `main` with `autoDeployTrigger: checksPass`, so a push deploys only after the CI checks pass. No secrets are needed. If you add any, set them in the dashboard (or as `sync: false` entries), never in the file.
+- `.github/workflows/ci.yml`: runs typecheck, lint, unit tests and a production build on every push and pull request.
+- Free instances sleep after about 15 minutes idle, so the first request after that takes roughly a minute.
+
+**Turning on auto-deploy (one-off, in the browser):** the service was first connected by public repo URL, and that kind of connection can't receive push events or see check results.
+1. In Render: **Account settings → GitHub → Configure** (or GitHub → Settings → Applications → Render → Configure). Under *Repository access*, add `teslha`.
+2. In Render: **teslha service → Settings → Build & Deploy → Repository**. Reconnect it to `SMLG120/teslha` through the GitHub app, branch `main`.
+3. Open **Blueprints → teslha → Sync** so the service picks up `render.yaml` (health check path and auto-deploy trigger). Check the diff it shows before you apply it.
+4. Push a commit and check that the CI run completes and a deploy then starts.
+
+Until then, deploy with **Manual Deploy → Deploy latest commit**. The app also runs on any Node host (`npm run build && npm start`) or Vercel with no extra configuration.
 
 ## Known limitations
 
-- Vehicle bodies are stylised approximations from published dimensions, not production surfaces. Component placement is schematic.
+- Vehicle bodies are stylised approximations from published dimensions, not production surfaces. Details such as exact light signatures, panel gaps, grille-less fascias and badge-level styling are simplified. Component placement is schematic.
+- No licensed GLB models are bundled, so the Draco/Meshopt loading path is documented but not wired up.
+- Interior is a simplified seat and dash layout, not a detailed cabin.
 - Prices and some top speeds remain `secondary`: tesla.com shows financing offers rather than a stable cash MSRP. Tesla changes trims and prices frequently, so re-verify before relying on any figure.
 - No DC charging curves yet: no dataset with documented test conditions has been added.
 - Per-trim EPA consumption (Wh/mi) is not yet in the dataset, so cost comparisons apply one assumed consumption to every EV (stated wherever it is used).

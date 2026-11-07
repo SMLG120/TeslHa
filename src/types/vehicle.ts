@@ -70,13 +70,8 @@ export const BodyGeometrySchema = z.object({
   heightMm: z.number(),
   wheelbaseMm: z.number(),
   wheelDiameterMm: z.number(),
-  /**
-   * Lower-body side silhouette, normalised: x 0 (front bumper) → 1 (rear bumper),
-   * y 0 (underbody) → 1 (roof). Points run clockwise from the front-bottom corner.
-   */
-  profile: z.array(z.tuple([z.number(), z.number()])).min(6),
-  /** Greenhouse (glass cabin) silhouette in the same normalised space. */
-  cabin: z.array(z.tuple([z.number(), z.number()])).min(4),
+  /** Procedural design (see src/lib/car-design/designs.ts): stylised surface parameters, not CAD. */
+  design: z.enum(["model-s", "model-3", "model-x", "model-y", "roadster-gen1", "roadster-gen2"]),
   doorStyle: z.enum(["conventional", "falcon", "coupe"]),
   hasFrunk: z.boolean(),
   roofType: z.enum(["fixed", "targa"]),

@@ -34,11 +34,25 @@ test("homepage hero loads the 3D scene and switches vehicles", async ({ page }) 
 test("studio toggles update control state", async ({ page }) => {
   await page.goto("/studio/model-s?q=low");
   await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
+  // On small screens the customisation panel starts collapsed.
+  const panel = page.getByRole("button", { name: /Customise & specifications/ });
+  if (await panel.isVisible()) await panel.click();
   const doors = page.getByRole("switch", { name: "Doors" });
   await doors.click();
   await expect(doors).toHaveAttribute("aria-checked", "true");
   await page.getByRole("radio", { name: "X-ray" }).click();
   await expect(page.getByRole("radio", { name: "X-ray" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("radio", { name: "Rear" }).click();
+  await expect(page.getByRole("radio", { name: "Rear" })).toHaveAttribute("aria-checked", "true");
+});
+
+test("studio switches models without a page reload", async ({ page }) => {
+  await page.goto("/studio/model-s?q=low");
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("navigation", { name: "Choose a vehicle" }).getByRole("button", { name: "Model X" }).click();
+  await expect(page).toHaveURL(/\/studio\/model-x$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Model X" })).toBeVisible();
+  await expect(page.locator("canvas")).toBeVisible();
 });
 
 test("engineering deep link opens the component panel", async ({ page }) => {

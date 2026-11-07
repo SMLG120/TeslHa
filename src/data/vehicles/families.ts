@@ -3,18 +3,8 @@ import type { BodyGeometry, VehicleFamily } from "@/types/vehicle";
 /**
  * Vehicle families. Exterior dimensions come from secondary sources (Wikipedia, citing
  * manufacturer data) and are used ONLY to proportion the procedural 3D representation.
- * The silhouettes are stylised approximations, not production surface data.
+ * Body shapes come from src/lib/car-design: stylised approximations, not production surface data.
  */
-
-const sedanProfile: BodyGeometry["profile"] = [
-  [0, 0.12], [0, 0.38], [0.03, 0.5], [0.24, 0.56], [0.33, 0.6], [0.75, 0.62],
-  [0.94, 0.61], [1, 0.55], [1, 0.3], [0.97, 0.12],
-];
-
-const crossoverProfile: BodyGeometry["profile"] = [
-  [0, 0.14], [0, 0.4], [0.03, 0.52], [0.24, 0.58], [0.31, 0.62], [0.8, 0.64],
-  [0.95, 0.63], [1, 0.57], [1, 0.3], [0.97, 0.14],
-];
 
 const MODEL_S_BODY: BodyGeometry = {
   lengthMm: 4970,
@@ -22,8 +12,7 @@ const MODEL_S_BODY: BodyGeometry = {
   heightMm: 1431,
   wheelbaseMm: 2960,
   wheelDiameterMm: 710,
-  profile: sedanProfile,
-  cabin: [[0.31, 0.6], [0.47, 0.95], [0.62, 1], [0.79, 0.86], [0.94, 0.62]],
+  design: "model-s",
   doorStyle: "conventional",
   hasFrunk: true,
   roofType: "fixed",
@@ -37,11 +26,7 @@ const ROADSTER_GEN1_BODY: BodyGeometry = {
   heightMm: 1127,
   wheelbaseMm: 2352,
   wheelDiameterMm: 620,
-  profile: [
-    [0, 0.1], [0, 0.42], [0.04, 0.55], [0.3, 0.62], [0.4, 0.66], [0.9, 0.7],
-    [1, 0.62], [1, 0.3], [0.97, 0.1],
-  ],
-  cabin: [[0.38, 0.66], [0.5, 0.97], [0.62, 1], [0.72, 0.7]],
+  design: "roadster-gen1",
   doorStyle: "coupe",
   hasFrunk: false,
   roofType: "targa",
@@ -56,11 +41,7 @@ const ROADSTER_GEN2_BODY: BodyGeometry = {
   heightMm: 1180,
   wheelbaseMm: 2650,
   wheelDiameterMm: 700,
-  profile: [
-    [0, 0.1], [0, 0.34], [0.05, 0.47], [0.3, 0.55], [0.36, 0.59], [0.92, 0.64],
-    [1, 0.56], [1, 0.28], [0.97, 0.1],
-  ],
-  cabin: [[0.34, 0.59], [0.5, 0.97], [0.64, 1], [0.86, 0.7], [0.93, 0.64]],
+  design: "roadster-gen2",
   doorStyle: "coupe",
   hasFrunk: true,
   roofType: "targa",
@@ -100,7 +81,7 @@ export const FAMILIES: VehicleFamily[] = [
       heightMm: 1441,
       wheelbaseMm: 2875,
       wheelDiameterMm: 680,
-      cabin: [[0.3, 0.6], [0.46, 0.96], [0.6, 1], [0.8, 0.85], [0.94, 0.63]],
+      design: "model-3",
       dimensionsSourceIds: ["wiki-model-3"],
     },
     asset: null,
@@ -122,8 +103,7 @@ export const FAMILIES: VehicleFamily[] = [
       heightMm: 1680,
       wheelbaseMm: 2965,
       wheelDiameterMm: 760,
-      profile: crossoverProfile,
-      cabin: [[0.27, 0.62], [0.42, 0.97], [0.62, 1], [0.88, 0.92], [0.96, 0.65]],
+      design: "model-x",
       doorStyle: "falcon",
       hasFrunk: true,
       roofType: "fixed",
@@ -149,8 +129,7 @@ export const FAMILIES: VehicleFamily[] = [
       heightMm: 1624,
       wheelbaseMm: 2891,
       wheelDiameterMm: 720,
-      profile: crossoverProfile,
-      cabin: [[0.3, 0.62], [0.45, 0.95], [0.6, 1], [0.83, 0.9], [0.95, 0.64]],
+      design: "model-y",
       doorStyle: "conventional",
       hasFrunk: true,
       roofType: "fixed",

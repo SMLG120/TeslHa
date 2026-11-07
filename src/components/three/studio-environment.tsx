@@ -27,11 +27,19 @@ export function StudioEnvironment({ night = false, intensity = 1 }: { night?: bo
       env.add(mesh);
     };
     const k = night ? 0.25 : 1;
+    // Overhead softbox + a second, smaller one: broad highlights across hood and roof.
     add("#ffffff", 3 * k, [0, 6, 0], [Math.PI / 2, 0, 0], [12, 4]);
-    add("#ffffff", 2 * k, [-7, 2, 0], [0, Math.PI / 2, 0], [10, 1.6]);
-    add("#ffffff", 2 * k, [7, 2, 0], [0, -Math.PI / 2, 0], [10, 1.6]);
-    add("#ffffff", 1.2 * k, [0, 3, 7], [0, Math.PI, 0], [6, 1]);
-    add("#ff2a36", night ? 3 : 1.6, [0, 1, -7], [0, 0, 0], [14, 0.5]);
+    add("#ffffff", 1.4 * k, [2, 5, 3], [Math.PI / 2, 0, 0], [4, 1.2]);
+    // Long horizontal strips on both flanks: the classic car-studio reflection line along the doors.
+    add("#ffffff", 2.4 * k, [0, 2.2, 7], [0, Math.PI, 0], [14, 0.9]);
+    add("#ffffff", 2.4 * k, [0, 2.2, -7], [0, 0, 0], [14, 0.9]);
+    add("#ffffff", 0.8 * k, [0, 0.9, 7], [0, Math.PI, 0], [14, 0.35]);
+    // Front and rear verticals.
+    add("#ffffff", 1.8 * k, [-7, 2, 0], [0, Math.PI / 2, 0], [10, 1.6]);
+    add("#ffffff", 1.8 * k, [7, 2, 0], [0, -Math.PI / 2, 0], [10, 1.6]);
+    // Red accent wall and a faint warm floor bounce.
+    add("#ff2a36", night ? 3 : 1.4, [0, 0.8, -6.9], [0, 0, 0], [14, 0.4]);
+    add("#3a3d44", 0.6 * k, [0, -1.5, 0], [-Math.PI / 2, 0, 0], [14, 14]);
 
     const pmrem = new THREE.PMREMGenerator(gl);
     const rt = pmrem.fromScene(env, 0.04);

@@ -1,14 +1,18 @@
-# Render Blueprint: https://render.com/docs/blueprint-spec
+# Render Blueprint. Changes here apply to the live service only after a Blueprint sync
+# (Dashboard → Blueprints → teslha → Sync), or automatically once the Blueprint is linked
+# to the GitHub repo through Render's GitHub app.
 services:
   - type: web
     name: teslha
     runtime: node
     plan: free
     buildCommand: npm ci && npm run build
-    # next start binds to $PORT, which Render provides.
     startCommand: npm start
-    healthCheckPath: /
-    autoDeploy: true
+    healthCheckPath: /api/health
+    # Deploy every push to main, but only after the GitHub Actions CI checks pass.
+    # Needs the repo connected through Render's GitHub app (a public-URL connection cannot see checks).
+    branch: main
+    autoDeployTrigger: checksPass
     envVars:
       - key: NODE_VERSION
         value: "24"

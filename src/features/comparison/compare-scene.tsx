@@ -27,7 +27,7 @@ export default function CompareScene({ items, view, nonce, lowPower }: { items: 
   const frame = useMemo(() => {
     const base = computeLayout(items.reduce((a, b) => (b.body.lengthMm > a.body.lengthMm ? b : a)).body);
     const rowWidth = spacing * items.length;
-    return { ...base, L: Math.max(base.L, rowWidth * 0.62) };
+    return { ...base, W: rowWidth };
   }, [items, spacing]);
 
   const labelRefs = useRef<(HTMLElement | null)[]>([]);
