@@ -115,13 +115,12 @@ Live at **https://teslha.onrender.com** (Render free web service, created from `
 - `.github/workflows/ci.yml`: runs typecheck, lint, unit tests and a production build on every push and pull request.
 - Free instances sleep after about 15 minutes idle, so the first request after that takes roughly a minute.
 
-**Turning on auto-deploy (one-off, in the browser):** the service was first connected by public repo URL, and that kind of connection can't receive push events or see check results.
-1. In Render: **Account settings → GitHub → Configure** (or GitHub → Settings → Applications → Render → Configure). Under *Repository access*, add `teslha`.
-2. In Render: **teslha service → Settings → Build & Deploy → Repository**. Reconnect it to `SMLG120/teslha` through the GitHub app, branch `main`.
-3. Open **Blueprints → teslha → Sync** so the service picks up `render.yaml` (health check path and auto-deploy trigger). Check the diff it shows before you apply it.
-4. Push a commit and check that the CI run completes and a deploy then starts.
+**Auto-deploy is on.** The service is connected through Render's GitHub app and synced from the Blueprint. A push to `main` runs CI, and Render deploys once the checks pass. A failed check blocks the deploy. To set this up again on a new account:
+1. GitHub → Settings → Applications → Render → Configure → *Repository access*: add the repo.
+2. Render → service → Settings → Repository → Edit: pick the repo from the Git Provider list (not "Public Git Repository").
+3. Render → Blueprints → teslha → Manual sync, review the diff, Approve.
 
-Until then, deploy with **Manual Deploy → Deploy latest commit**. The app also runs on any Node host (`npm run build && npm start`) or Vercel with no extra configuration.
+**Manual Deploy → Deploy latest commit** still works for redeploying without a push. The app also runs on any Node host (`npm run build && npm start`) or Vercel with no extra configuration.
 
 ## Known limitations
 
