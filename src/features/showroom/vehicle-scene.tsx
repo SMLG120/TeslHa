@@ -7,6 +7,8 @@ import { useStudio } from "@/stores/studio";
 import { Stage, CameraRig } from "@/components/three/stage";
 import { ProceduralVehicle } from "@/components/three/procedural-vehicle";
 import { computeLayout } from "@/components/three/vehicle-geometry";
+import { DebugBridge, debugRequested } from "@/components/three/debug-bridge";
+import dynamic from "next/dynamic";
 import { useReducedMotion } from "@/hooks/use-device";
 import type { BodyGeometry } from "@/types/vehicle";
 
@@ -20,6 +22,8 @@ export interface VehicleSceneProps {
   onReady?: () => void;
 }
 
+const GeometryOverlay = dynamic(() => import("@/components/three/geometry-overlay"), { ssr: false });
+
 /** Store-driven vehicle viewer shared by the 3D Studio and the Engineering Lab. */
 export default function VehicleScene({ body, name, motors, lowPower, engineering = false, onReady }: VehicleSceneProps) {
   const s = useStudio();
@@ -32,6 +36,7 @@ export default function VehicleScene({ body, name, motors, lowPower, engineering
   useEffect(() => () => void (document.body.style.cursor = ""), []);
 
   const exterior = s.view !== "interior";
+  const [debug] = useState(debugRequested);
   return (
     <Stage
       className="absolute inset-0"
@@ -40,6 +45,7 @@ export default function VehicleScene({ body, name, motors, lowPower, engineering
       camera={{ position: [6, 2, 7], fov: 30 }}
       ariaLabel={`Interactive 3D procedural representation of the ${name}. Drag to orbit, scroll or pinch to zoom.`}
       onReady={onReady}
+      bloom={exterior}
     >
       <Swap target={body} shown={shown} onSwap={setShown} reduced={reduced}>
         <group onPointerMissed={() => (engineering || s.showComponents) && s.set({ selected: null })}>
@@ -59,11 +65,14 @@ export default function VehicleScene({ body, name, motors, lowPower, engineering
             flow={s.flow}
             motors={motors}
             lowDetail={lowPower}
+            // Cabin lamps only when inside (or a door is open), as in a parked car.
+            cabinLight={s.view === "interior" || s.doorsOpen ? s.cabinLight : "off"}
           />
         </group>
       </Swap>
       <CameraRig
         view={s.view}
+        interiorView={s.interiorView}
         nonce={s.viewNonce}
         layout={layout}
         focus={focus}
@@ -71,6 +80,8 @@ export default function VehicleScene({ body, name, motors, lowPower, engineering
         minDistance={exterior ? Math.max(2.2, layout.L * 0.55) : 0.01}
         maxDistance={exterior ? layout.L * 2.6 : 3}
       />
+      {debug && <DebugBridge layout={layout} />}
+      {debug === "geometry" && <GeometryOverlay layout={layout} />}
     </Stage>
   );
 }

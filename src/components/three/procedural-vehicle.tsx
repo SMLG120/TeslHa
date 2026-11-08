@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { RoundedBox } from "@react-three/drei";
 import type { BodyGeometry } from "@/types/vehicle";
 import type { ComponentId } from "@/data/components";
 import { PAINTS, type FlowMode, type PaintId, type RenderMode } from "@/stores/studio";
@@ -11,6 +10,9 @@ import { surfaceFor, type CarSurface } from "@/lib/car-design/surface";
 import { buildCar, buildWheel, type CarMeshes, type Opening, type WheelGeometries } from "./car-mesh";
 import { computeLayout, type ComponentPlacement, type VehicleLayout } from "./vehicle-geometry";
 import { EnergyFlow } from "./energy-flow";
+import { CabinInterior, DoorCardDetails, useCabinMaterials, type CabinLight } from "./cabin-interior";
+import { cabinFor } from "@/lib/car-design/cabin";
+import { wheelhouseInnerZ } from "@/lib/car-design/vehicle-frame";
 
 export interface ProceduralVehicleProps {
   body: BodyGeometry;
@@ -29,6 +31,7 @@ export interface ProceduralVehicleProps {
   motors?: number;
   /** Simplified geometry for mobile / low-power devices. */
   lowDetail?: boolean;
+  cabinLight?: CabinLight;
 }
 
 const COMPONENT_COLORS: Record<ComponentId, string> = {
@@ -45,7 +48,8 @@ const COMPONENT_COLORS: Record<ComponentId, string> = {
 };
 
 const damp = THREE.MathUtils.damp;
-const GLASS_OPACITY = 0.92;
+/** Tinted but see-through, so the modelled cabin reads from outside. */
+const GLASS_OPACITY = 0.8;
 
 function disposeAll(list: (THREE.BufferGeometry | THREE.Material | null | undefined)[]) {
   list.forEach((x) => x?.dispose());
@@ -67,6 +71,7 @@ export function ProceduralVehicle({
   flow = "off",
   motors = 2,
   lowDetail = false,
+  cabinLight = "soft",
 }: ProceduralVehicleProps) {
   const surface = surfaceFor(body);
   const layout = useMemo(() => computeLayout(body), [body]);
@@ -88,7 +93,7 @@ export function ProceduralVehicle({
         car.head,
         car.drl,
         car.tail,
-        ...car.openings.flatMap((o) => [o.paint, o.glass, o.detail]),
+        ...car.openings.flatMap((o) => [o.paint, o.glass, o.detail, o.inner]),
       ]),
     [car],
   );
@@ -126,7 +131,8 @@ export function ProceduralVehicle({
       }),
       glassDouble: new THREE.MeshPhysicalMaterial({ color: "#0b0e13", metalness: 0.3, roughness: 0.03, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.7 }),
       roof: new THREE.MeshPhysicalMaterial({ color: "#040506", metalness: 0.4, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.7 }),
-      seam: new THREE.MeshStandardMaterial({ color: "#050505", roughness: 0.7 }),
+      // Pulled toward the camera so the thin strips never fight the panel they sit on.
+      seam: new THREE.MeshStandardMaterial({ color: "#050505", roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       trim: new THREE.MeshPhysicalMaterial({ color: "#07080a", roughness: 0.32, metalness: 0.2, clearcoat: 0.6 }),
       housing: new THREE.MeshPhysicalMaterial({ color: "#0c0d10", roughness: 0.08, metalness: 0.5, clearcoat: 1, envMapIntensity: 1.8 }),
       handle: new THREE.MeshStandardMaterial({ color: "#2a2d33", metalness: 0.9, roughness: 0.3 }),
@@ -135,9 +141,6 @@ export function ProceduralVehicle({
       rimDark: new THREE.MeshStandardMaterial({ color: "#1b1d21", metalness: 0.6, roughness: 0.35, side: THREE.DoubleSide }),
       disc: new THREE.MeshStandardMaterial({ color: "#6c7078", metalness: 0.9, roughness: 0.45 }),
       caliper: new THREE.MeshStandardMaterial({ color: surface.design.caliper, metalness: 0.4, roughness: 0.4 }),
-      interior: new THREE.MeshStandardMaterial({ color: "#1b1c1f", roughness: 0.75 }),
-      seat: new THREE.MeshStandardMaterial({ color: "#26272b", roughness: 0.6 }),
-      screen: new THREE.MeshStandardMaterial({ color: "#0b1622", emissive: "#3aa3ff", emissiveIntensity: 0.55 }),
     };
   }, [p.color, p.metalness, p.roughness, surface.design.caliper]);
   useEffect(() => () => disposeAll(Object.values(mats)), [mats]);
@@ -159,6 +162,9 @@ export function ProceduralVehicle({
   }, [mats, xray, wire]);
 
   const componentsVisible = showComponents || xray;
+  const showCabin = !componentsVisible && !wire;
+  const cabin = cabinFor(surface);
+  const cabinMats = useCabinMaterials(cabin, cabin.spec.glassRoof);
   const openFor = (o: Opening) => (o.kind === "frunk" ? frunkOpen : o.kind === "trunk" ? trunkOpen : doorsOpen);
 
   return (
@@ -172,14 +178,21 @@ export function ProceduralVehicle({
       <Lamps car={car} surface={surface} headlights={headlights} taillights={taillights} />
 
       {car.openings.map((o, i) => (
-        <OpeningPanel key={i} opening={o} open={openFor(o)} paint={mats.paintDouble} glass={mats.glassDouble} detail={mats.handle} />
+        <OpeningPanel key={i} opening={o} open={openFor(o)} paint={mats.paintDouble} glass={o.kind === "falcon" ? [mats.glassDouble, mats.roof] : mats.glassDouble} detail={mats.handle}>
+          {showCabin && o.inner && (
+            <>
+              <mesh geometry={o.inner} material={cabinMats.trimPanel} />
+              <DoorCardDetails cabin={cabin} door={o.door!} side={o.hinge[2] > 0 ? 1 : -1} mats={cabinMats} />
+            </>
+          )}
+        </OpeningPanel>
       ))}
 
       <Mirrors car={car} paint={mats.paint} trim={mats.trim} />
       <WheelWells layout={layout} material={mats.under} />
       <Wheels layout={layout} geo={wheel} mats={mats} spinning={flow} />
 
-      {!lowDetail && !componentsVisible && <Interior surface={surface} mats={mats} />}
+      {showCabin && <CabinInterior surface={surface} cabin={cabin} mats={cabinMats} car={car} light={cabinLight} low={lowDetail} />}
 
       {componentsVisible && <Components layout={layout} exploded={exploded} selected={selected} onSelect={onSelect} motors={motors} />}
       {flow !== "off" && <EnergyFlow layout={layout} mode={flow} motors={motors} />}
@@ -234,7 +247,7 @@ function Lamps({ car, surface, headlights, taillights }: { car: CarMeshes; surfa
   );
 }
 
-function OpeningPanel({ opening, open, paint, glass, detail }: { opening: Opening; open: boolean; paint: THREE.Material; glass: THREE.Material; detail: THREE.Material }) {
+function OpeningPanel({ opening, open, paint, glass, detail, children }: { opening: Opening; open: boolean; paint: THREE.Material; glass: THREE.Material | THREE.Material[]; detail: THREE.Material; children?: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   const [hx, hy, hz] = opening.hinge;
   useFrame((_, dt) => {
@@ -249,6 +262,7 @@ function OpeningPanel({ opening, open, paint, glass, detail }: { opening: Openin
         <mesh geometry={opening.paint} material={paint} castShadow />
         {opening.glass && <mesh geometry={opening.glass} material={glass} />}
         {opening.detail && <mesh geometry={opening.detail} material={detail} />}
+        {children}
       </group>
     </group>
   );
@@ -279,14 +293,16 @@ function Mirrors({ car, paint, trim }: { car: CarMeshes; paint: THREE.Material; 
  * the hood) plus inner half-disc walls, so the arches read as openings rather than see-through gaps.
  */
 function WheelWells({ layout, material }: { layout: VehicleLayout; material: THREE.Material }) {
-  const { surface: s, W, tireW } = layout;
-  const inner = W / 2 - 0.045 - tireW - 0.02;
+  const { surface: s, W } = layout;
+  const inner = wheelhouseInnerZ(s);
   const r = s.archR - 0.012;
+  // One short shell per wheel, inner wall to flank; it must not span the cabin between them.
+  const span = W / 2 - inner;
   const geo = useMemo(() => {
-    const shell = new THREE.CylinderGeometry(r, r, inner * 2 + tireW * 2 + 0.06, 40, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2);
+    const shell = new THREE.CylinderGeometry(r, r, span, 40, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2);
     const wall = new THREE.CircleGeometry(r, 40, 0, Math.PI);
     return { shell, wall };
-  }, [r, inner, tireW]);
+  }, [r, span]);
   useEffect(() => () => disposeAll([geo.shell, geo.wall]), [geo]);
   const wellMat = useMemo(() => {
     const m = (material as THREE.MeshStandardMaterial).clone();
@@ -298,7 +314,8 @@ function WheelWells({ layout, material }: { layout: VehicleLayout; material: THR
     <group>
       {[s.frontAxleX, s.rearAxleX].map((x) => (
         <group key={x} position={[x, s.wheelR, 0]}>
-          <mesh geometry={geo.shell} material={wellMat} />
+          <mesh geometry={geo.shell} material={wellMat} position={[0, 0, inner + span / 2]} />
+          <mesh geometry={geo.shell} material={wellMat} position={[0, 0, -inner - span / 2]} />
           <mesh geometry={geo.wall} material={wellMat} position={[0, 0, inner]} />
           <mesh geometry={geo.wall} material={wellMat} position={[0, 0, -inner]} />
         </group>
@@ -345,39 +362,6 @@ function Wheels({
           </group>
         </group>
       ))}
-    </group>
-  );
-}
-
-function Interior({ surface: s, mats }: { surface: CarSurface; mats: Record<string, THREE.Material> }) {
-  const d = s.design;
-  const g0 = s.glass[0];
-  const dashX = s.xAt(g0) - 0.32;
-  const belt = s.beltAt(g0 + 0.05);
-  const floor = d.groundClearance + 0.14;
-  const rows = Array.from({ length: d.seatRows }, (_, r) => dashX - 0.62 - r * 0.86);
-  const seatZ = s.W * 0.2;
-  // Seats scale down under low rooflines (roadsters) so they never poke through the glass.
-  const fit = (x: number) => Math.min(1, Math.max(0.55, (s.roofAt(s.tAt(x - 0.3)) - floor - 0.12) / 0.98));
-  return (
-    <group>
-      {rows.flatMap((x, r) =>
-        [1, -1].map((side) => (
-          <group key={`${r}-${side}`} position={[x, floor, side * seatZ]} scale={[1, fit(x), 1]}>
-            <RoundedBox args={[0.5, 0.12, 0.48]} radius={0.04} position={[0, 0.16, 0]} material={mats.seat} />
-            <RoundedBox args={[0.12, 0.6, 0.46]} radius={0.04} position={[-0.25, 0.48, 0]} rotation={[0, 0, -0.2]} material={mats.seat} />
-            <RoundedBox args={[0.1, 0.16, 0.26]} radius={0.04} position={[-0.33, 0.86, 0]} rotation={[0, 0, -0.2]} material={mats.seat} />
-          </group>
-        )),
-      )}
-      <RoundedBox args={[0.42, 0.12, s.W * 0.8]} radius={0.04} position={[dashX, belt - 0.12, 0]} material={mats.interior} />
-      <mesh material={mats.screen} position={[dashX - 0.2, belt + 0.02, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        <planeGeometry args={[0.38, 0.24]} />
-      </mesh>
-      <mesh material={mats.trim} position={[dashX - 0.26, belt - 0.04, -seatZ]} rotation={[0, Math.PI / 2, 0]}>
-        <torusGeometry args={[0.17, 0.018, 12, 40]} />
-      </mesh>
-      <RoundedBox args={[1.2, 0.18, 0.2]} radius={0.05} position={[dashX - 0.9, floor + 0.12, 0]} material={mats.interior} />
     </group>
   );
 }

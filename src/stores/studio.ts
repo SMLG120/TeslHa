@@ -1,6 +1,7 @@
 "use client";
 import { create } from "zustand";
 import type { ComponentId } from "@/data/components";
+import type { CabinLight, InteriorView } from "@/lib/car-design/cabin";
 
 export type CameraView = "hero" | "front" | "rear" | "side" | "top" | "interior";
 export type RenderMode = "solid" | "xray" | "wireframe";
@@ -34,9 +35,13 @@ interface StudioState {
   selected: ComponentId | null;
   flow: FlowMode;
   autoRotate: boolean;
-  set: (patch: Partial<Omit<StudioState, "set" | "setView" | "reset" | "resetVehicle">>) => void;
+  /** Camera position inside the cabin when view is "interior". */
+  interiorView: InteriorView;
+  cabinLight: CabinLight;
+  set: (patch: Partial<Omit<StudioState, "set" | "setView" | "setInteriorView" | "reset" | "resetVehicle">>) => void;
   setView: (v: CameraView) => void;
   reset: () => void;
+  setInteriorView: (v: InteriorView) => void;
   /** Close panels and clear selection when switching vehicles; keeps paint and scene choices. */
   resetVehicle: () => void;
 }
@@ -57,13 +62,16 @@ const initial = {
   selected: null,
   flow: "off" as FlowMode,
   autoRotate: false,
+  interiorView: "driver" as InteriorView,
+  cabinLight: "soft" as CabinLight,
 };
 
 export const useStudio = create<StudioState>()((set) => ({
   ...initial,
   set: (patch) => set(patch),
   setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1 })),
+  setInteriorView: (interiorView) => set((s) => ({ view: "interior", interiorView, viewNonce: s.viewNonce + 1 })),
   reset: () => set((s) => ({ ...initial, viewNonce: s.viewNonce + 1 })),
   resetVehicle: () =>
-    set((s) => ({ doorsOpen: false, frunkOpen: false, trunkOpen: false, selected: null, exploded: false, view: "hero", viewNonce: s.viewNonce + 1 })),
+    set((s) => ({ doorsOpen: false, frunkOpen: false, trunkOpen: false, selected: null, exploded: false, view: s.view === "interior" ? "interior" : "hero", interiorView: s.view === "interior" && s.interiorView === "rear" ? "driver" : s.interiorView, viewNonce: s.viewNonce + 1 })),
 }));

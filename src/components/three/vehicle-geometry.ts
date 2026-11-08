@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { BodyGeometry } from "@/types/vehicle";
 import { CarSurface, surfaceFor } from "@/lib/car-design/surface";
+import { cabinFor, type CabinLayout } from "@/lib/car-design/cabin";
 import type { ComponentId } from "@/data/components";
 
 /** Derived, metre-scale layout for a procedural vehicle. Front of the car faces +X, ground is y = 0, right side is +Z. */
@@ -13,6 +14,7 @@ export interface VehicleLayout {
   frontAxleX: number;
   rearAxleX: number;
   beltY: number;
+  cabin: CabinLayout;
   surface: CarSurface;
   components: Record<ComponentId, ComponentPlacement[]>;
   cameraTargets: Record<ComponentId, THREE.Vector3>;
@@ -102,5 +104,5 @@ export function computeLayout(body: BodyGeometry): VehicleLayout {
     }),
   ) as Record<ComponentId, THREE.Vector3>;
 
-  return { L, W, H, wheelR, tireW, frontAxleX, rearAxleX, beltY, surface: sf, components, cameraTargets };
+  return { L, W, H, wheelR, tireW, frontAxleX, rearAxleX, beltY, cabin: cabinFor(sf), surface: sf, components, cameraTargets };
 }

@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { CarSurface, type Vec3 } from "@/lib/car-design/surface";
 import type { LightPatch, RimStyle } from "@/lib/car-design/designs";
+import { cabinFor } from "@/lib/car-design/cabin";
+import { PACKAGING, wheelhouseInnerZ } from "@/lib/car-design/vehicle-frame";
 
 /**
  * Builds three.js geometry from a CarSurface.
@@ -112,6 +114,13 @@ export interface Opening {
   paint: THREE.BufferGeometry;
   glass: THREE.BufferGeometry | null;
   detail: THREE.BufferGeometry | null;
+  /** Inner door card, following the skin. Doors only. */
+  inner: THREE.BufferGeometry | null;
+  /** Index into the design's door bands (doors only). */
+  door: number | null;
+  /** Grid bands of this panel, used to test that it fits its opening. */
+  band: readonly [number, number];
+  uBand: readonly [number, number];
 }
 
 export interface CarMeshes {
@@ -136,7 +145,15 @@ export function buildCar(s: CarSurface, low = false): CarMeshes {
   const nV = low ? 18 : 40;
   const [g0, g1] = s.glass;
   const doorBands = d.doors.slice(0, -1).map((t0, i) => [t0, d.doors[i + 1]] as const);
-  const doorU = d.doorU;
+  // Cabin opening: everything above the belt junction. The glass base is built on the same line.
+  const uc = s.beltU;
+  const cabinU: readonly [number, number] = [uc, 1 - uc];
+  // The opening runs from the dash to the rear bulkhead; the strips ahead of and behind it stay
+  // closed as a dark cowl and parcel shelf, so the dash has something to tuck beneath.
+  const cabin = cabinFor(s);
+  const cabinT: readonly [number, number] = [s.tAt(cabin.dashFrontX), s.tAt(cabin.rearX)];
+  // Door skins stop at the cabin opening so no panel reaches into the cabin.
+  const doorU: readonly [number, number] = [d.doorU[0], Math.min(d.doorU[1], uc)];
   const doorUL = mirrorBand(doorU);
   const isFalcon = (i: number) => d.id === "model-x" && i === 1;
   const doorVFor = (i: number) => (isFalcon(i) ? d.doorV : Math.min(d.doorV, 0.32));
@@ -150,11 +167,11 @@ export function buildCar(s: CarSurface, low = false): CarMeshes {
   const ts = merge(
     // denser near the ends where the closures curve fastest
     range(0, 1, nT).map((t) => 0.5 - 0.5 * Math.cos(Math.PI * (0.18 * t + 0.82 * (0.5 - 0.5 * Math.cos(Math.PI * t))))),
-    [...d.doors, ...lidT, g0, g1, ...archEdges],
+    [...d.doors, ...lidT, g0, g1, cabinT[0], cabinT[1], ...archEdges],
     0,
     1,
   );
-  const us = merge(range(0, 1, nU).slice(0, -1), [doorU[0], doorU[1], doorUL[0], doorUL[1], LID_U[0], LID_U[1]], 0, 0.999999);
+  const us = merge(range(0, 1, nU).slice(0, -1), [doorU[0], doorU[1], doorUL[0], doorUL[1], LID_U[0], LID_U[1], cabinU[0], cabinU[1]], 0, 0.999999);
   const liftV: readonly [number, number] = [0.1, 0.9];
   const vs = merge(range(0, 1, nV), [...doorBands.flatMap((_, i) => [doorVFor(i), 1 - doorVFor(i)]), liftV[0], liftV[1]], 0, 1);
   const tsGlass = merge(ts.filter((t) => t > g0 && t < g1), [g0, g1], g0, g1);
@@ -169,6 +186,16 @@ export function buildCar(s: CarSurface, low = false): CarMeshes {
   const inFrunk = (t: number, u: number) => !!d.frunk && inBand(t, d.frunk) && inBand(u, LID_U);
   const deckBand: readonly [number, number] = d.trunk.liftback ? [g1, d.trunk.t[1]] : d.trunk.t;
   const inDeck = (t: number, u: number) => inBand(t, deckBand) && inBand(u, LID_U);
+  // The loft is a closed tube: open its top under the greenhouse so the cabin is visible and enterable.
+  const inCabin = (t: number, u: number) => inBand(t, cabinT) && inBand(u, cabinU);
+  const inCowlOrShelf = (t: number, u: number) => inBand(t, [g0, g1]) && inBand(u, cabinU) && !inCabin(t, u);
+  // The body ring rises over each axle so the arches read from outside. Between the wheelhouses
+  // that crown would cut through the cabin floor and rear seats, so it is opened there.
+  const wellZ = wheelhouseInnerZ(s);
+  // The margin covers the step where the ring drops back to the sill just outside the arch.
+  const crownT = [s.tFrontAxle, s.tRearAxle].map((ta) => [ta - (s.archR + 0.06) / s.L, ta + (s.archR + 0.06) / s.L] as const);
+  const inAxleCrown = (t: number, u: number) =>
+    inBand(t, cabinT) && crownT.some((b) => inBand(t, b)) && (u < 0.25 || u > 0.75) && Math.abs(s.body(t, u)[2]) < wellZ + 0.05; // the margin stays hidden inside the wheelhouse shell
   const inDoorGlass = (t: number, v: number) =>
     doorBands.some((band, i) => inBand(t, band) && (v < doorVFor(i) || v > 1 - doorVFor(i)));
   const inLiftGlass = (t: number, v: number) => d.trunk.liftback && inBand(t, [d.trunk.t[0], g1]) && inBand(v, liftV);
@@ -176,16 +203,20 @@ export function buildCar(s: CarSurface, low = false): CarMeshes {
     // Dark underbody only between the nose/tail caps; on the caps the same u band faces forward/back.
   const capF = d.noseLen / s.L;
   const capR = 1 - d.tailLen / s.L;
-  const underside = (t: number, u: number) => ((u < 0.1 || u > 0.9) && t > capF && t < capR ? 1 : 0);
+  const underside = (t: number, u: number) => (((u < 0.1 || u > 0.9) && t > capF && t < capR) || inCowlOrShelf(t, u) ? 1 : 0);
   const body = grid(bodyFn, ts, us, {
     closedB: true,
-    skip: (t, u) => inDoorBody(t, u) || inFrunk(t, u) || inDeck(t, u),
+    skip: (t, u) => inDoorBody(t, u) || inFrunk(t, u) || inDeck(t, u) || inCabin(t, u) || inAxleCrown(t, u),
     group: underside,
     poleNormal: pole,
   });
-  const liner = grid(bodyFn, ts.filter((_, i) => i % 3 === 0 || i === ts.length - 1), us.filter((_, i) => i % 2 === 0), {
+  // Every cut line stays on the liner's coarser grid so openings have clean edges.
+  const linerT = merge(ts.filter((_, i) => i % 3 === 0), [...d.doors, cabinT[0], cabinT[1], ...archEdges, 1], 0, 1);
+  const linerU = merge(us.filter((_, i) => i % 2 === 0), [doorU[0], doorU[1], doorUL[0], doorUL[1], cabinU[0], cabinU[1]], 0, 0.999999);
+  const liner = grid(bodyFn, linerT, linerU, {
     closedB: true,
     offset: -0.025,
+    skip: (t, u) => inCabin(t, u) || inDoorBody(t, u) || inAxleCrown(t, u),
     poleNormal: pole,
   });
   // Opaque black glass roof between windshield header and rear-glass header (Tesla-style panoramic roof).
@@ -209,39 +240,52 @@ export function buildCar(s: CarSurface, low = false): CarMeshes {
       const paint = grid(bodyFn, sub(ts, band), sub(us, uBand));
       const gBand: readonly [number, number] = [Math.max(band[0], g0), Math.min(band[1], g1)];
       const vBand: readonly [number, number] = side === 1 ? [0, doorVFor(i)] : [1 - doorVFor(i), 1];
-      const glassPart = gBand[1] > gBand[0] ? grid(glassFn, sub(tsGlass, gBand), sub(vs, vBand)) : null;
+      // A falcon door carries its share of the opaque roof, so the roof reads as one surface when closed.
+      const glassGroup = falcon ? { group: (t: number, v: number) => (inBand(t, roofBand) && inBand(v, roofV) ? 1 : 0) } : {};
+      const gvs = falcon ? merge(sub(vs, vBand), [...roofV].filter((v) => inBand(v, vBand)), 0, 1) : sub(vs, vBand);
+      const glassPart = gBand[1] > gBand[0] ? grid(glassFn, sub(tsGlass, gBand), gvs, glassGroup) : null;
+      const inner = grid(bodyFn, sub(ts, band), sub(us, uBand), { offset: -PACKAGING.doorCardDepth });
       // Flush handle near the trailing upper edge.
       const th = band[1] - 0.14 / s.L;
       const uh = side === 1 ? uBand[1] - 0.045 : uBand[0] + 0.045;
       const handle = patch(bodyFn, [th - 0.075 / s.L, th + 0.075 / s.L], [uh - 0.006, uh + 0.006], 0.004);
+      const common = { paint, glass: glassPart, detail: handle, inner, door: i, band, uBand };
       if (falcon) {
         const tm = (band[0] + band[1]) / 2;
-        openings.push({ kind: "falcon", hinge: [s.xAt(tm), s.roofAt(tm), 0], axis: "x", angle: -side * 1.25, paint, glass: glassPart, detail: handle });
+        // Hinged along the door's top edge, beside the fixed roof spine.
+        const top = s.glassAt(tm, side === 1 ? d.doorV : 1 - d.doorV);
+        openings.push({ kind: "falcon", hinge: [s.xAt(tm), top[1], top[2]], axis: "x", angle: -side * 1.25, ...common });
       } else {
         const hingeP = s.body(band[0], (uBand[0] + uBand[1]) / 2);
-        openings.push({ kind: "door", hinge: [s.xAt(band[0]), hingeP[1], hingeP[2]], axis: "y", angle: side * 1.0, paint, glass: glassPart, detail: handle });
+        if (d.doorHinge === "scissor") {
+          // Lifts upward about a transverse axis at the door's front edge.
+          openings.push({ kind: "door", hinge: [s.xAt(band[0]), s.beltAt(band[0]), hingeP[2]], axis: "z", angle: -1.15, ...common });
+        } else {
+          openings.push({ kind: "door", hinge: [s.xAt(band[0]), hingeP[1], hingeP[2]], axis: "y", angle: side * 1.0, ...common });
+        }
       }
     }
   });
   if (d.frunk) {
     const paint = grid(bodyFn, sub(ts, d.frunk), sub(us, LID_U));
     const top = s.body(d.frunk[1], 0.5);
-    openings.push({ kind: "frunk", hinge: [s.xAt(d.frunk[1]), top[1], 0], axis: "z", angle: 0.85, paint, glass: null, detail: null });
+    openings.push({ kind: "frunk", hinge: [s.xAt(d.frunk[1]), top[1], 0], axis: "z", angle: 0.85, paint, glass: null, detail: null, inner: null, door: null, band: d.frunk, uBand: LID_U });
   }
   {
     const paint = grid(bodyFn, sub(ts, deckBand), sub(us, LID_U));
     const glassPart = d.trunk.liftback ? grid(glassFn, sub(tsGlass, [d.trunk.t[0], g1]), sub(vs, liftV)) : null;
     const t0 = d.trunk.t[0];
     const hingeY = d.trunk.liftback ? s.roofAt(t0) : s.body(t0, 0.5)[1];
-    openings.push({ kind: "trunk", hinge: [s.xAt(t0), hingeY, 0], axis: "z", angle: d.trunk.liftback ? -1.15 : -0.95, paint, glass: glassPart, detail: null });
+    openings.push({ kind: "trunk", hinge: [s.xAt(t0), hingeY, 0], axis: "z", angle: d.trunk.liftback ? -1.15 : -0.95, paint, glass: glassPart, detail: null, inner: null, door: null, band: deckBand, uBand: LID_U });
   }
 
   // ── Seams: thin dark strips along every cut line ───────────────────────────────────
   const seamParts: THREE.BufferGeometry[] = [];
   const dt = 0.0022 / s.L;
   const du = 0.0016;
-  const seamT = (t: number, band: readonly [number, number]) => seamParts.push(patch(bodyFn, [t - dt, t + dt], band, 0.0012));
-  const seamU = (u: number, band: readonly [number, number]) => seamParts.push(patch(bodyFn, band, [u - du, u + du], 0.0012));
+  // Long, thin strips: tessellated along their length so they follow the body instead of dipping under it.
+  const seamT = (t: number, band: readonly [number, number]) => seamParts.push(patch(bodyFn, [t - dt, t + dt], band, 0.002, 2, 40));
+  const seamU = (u: number, band: readonly [number, number]) => seamParts.push(patch(bodyFn, band, [u - du, u + du], 0.002, 40, 2));
   doorBands.forEach((band) => {
     for (const ub of [doorU, doorUL]) {
       seamT(band[0], ub);
@@ -260,6 +304,22 @@ export function buildCar(s: CarSurface, low = false): CarMeshes {
     const tb = d.doors[1];
     const w = 0.035 / s.L;
     for (const vb of [[0, 0.27], [0.73, 1]] as const) seamParts.push(patch(glassFn, [tb - w, tb + w], vb, 0.003));
+  }
+  // Window frame. At the roof the rail sits above the side glass; toward each end of the greenhouse it
+  // converges on the glass base, becoming the A- and C-pillars at the windshield and rear-glass edges.
+  // It stops at a falcon door, which carries that part of the roof with it.
+  const railV = Math.max(...doorBands.map((_, i) => (isFalcon(i) ? 0 : doorVFor(i)))) + 0.002;
+  const railAt = (t: number) => {
+    const k = t < roofBand[0] ? (t - g0) / (roofBand[0] - g0) : t > roofBand[1] ? (g1 - t) / (g1 - roofBand[1]) : 1;
+    const e = Math.min(1, Math.max(0, k));
+    return 0.03 + (railV - 0.03) * e * e * (3 - 2 * e);
+  };
+  const railBands = doorBands.some((_, i) => isFalcon(i)) ? ([[g0, d.doors[1]], [d.doors[2], g1]] as const) : ([[g0, g1]] as const);
+  const railWidth = 0.035;
+  for (const band of railBands) {
+    const right: Fn = (t, w) => s.glassAt(t, railAt(t) + w * railWidth);
+    const left: Fn = (t, w) => s.glassAt(t, 1 - railAt(t) - (1 - w) * railWidth);
+    seamParts.push(patch(right, band, [0, 1], 0.003, 80, 1), patch(left, band, [0, 1], 0.003, 80, 1));
   }
   const seams = mergeGeometries(seamParts.map(stripGroups)) ?? new THREE.BufferGeometry();
 

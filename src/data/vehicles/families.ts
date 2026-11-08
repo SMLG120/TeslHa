@@ -91,11 +91,11 @@ export const FAMILIES: VehicleFamily[] = [
   {
     id: "model-x",
     name: "Model X",
-    tagline: "Seven seats, falcon-wing doors, tri-motor performance",
+    tagline: "Three rows, falcon-wing doors, tri-motor performance",
     segment: "Full-size SUV",
     productionYears: "2015 – 2026",
     summary:
-      "Shares much of its powertrain with Model S but packages it into a tall, seven-seat SUV with articulating falcon-wing rear doors and a panoramic windshield.",
+      "Shares much of its powertrain with Model S but packages it into a tall, three-row SUV (up to six seats per tesla.com) with articulating falcon-wing rear doors and a panoramic windshield.",
     statusNote: "Production ended at Fremont in 2026 alongside Model S. Specs shown are the final US model year.",
     body: {
       lengthMm: 5057,
@@ -144,10 +144,10 @@ export const FAMILIES: VehicleFamily[] = [
     id: "roadster",
     name: "Roadster",
     tagline: "Where it started, and the hypercar that was promised",
-    segment: "Two-seat sports car / 2+2 hypercar",
+    segment: "Two-seat sports car / two-seat hypercar",
     productionYears: "2008 – 2012 · next generation announced",
     summary:
-      "The original Roadster (2008–2012) used a Lotus-derived chassis and a pack of laptop-format cells to prove EVs could be fast. The next-generation Roadster, revealed in 2017, has not entered production.",
+      "The original Roadster (2008–2012) used a Lotus-derived chassis and a pack of laptop-format cells to prove EVs could be fast. The next-generation Roadster, first shown in 2017 as a 2+2 and since redesigned as an angular two-seater, has not entered production.",
     statusNote:
       "Next-generation figures are 2017 announcement targets, not production specs. Unveil dates have slipped repeatedly; reported production start is 2027.",
     body: ROADSTER_GEN1_BODY,

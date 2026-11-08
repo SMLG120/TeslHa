@@ -41,10 +41,13 @@ No accurate, legally licensed production models with separable doors, interiors 
 - `src/components/three/car-mesh.ts`: turns the surface into grid meshes, including paint/underside groups, the glass with a black roof panel, openings cut from the body (doors, falcon-wing doors, frunk, trunk/liftgate), seams, lamps, mirrors, the charge port and lathe-turned wheels in five rim styles.
 - `src/components/three/procedural-vehicle.tsx`: materials (clear-coat paint, tinted glass), render modes (paint / x-ray / wireframe), hinged openings with damped motion, head/tail lamps with spotlights, wheel wells, interior and selectable components.
 - `src/components/three/vehicle-geometry.ts`: component placements, explode vectors and camera targets derived from the surface.
+- `src/lib/car-design/cabin.ts` + `src/components/three/cabin-interior.tsx`: the **Interior Explorer**. Each design has a `CabinSpec` (steering type, centre-screen size, driver display, rear display, ambient lighting, seat rows, upholstery, glass roof) with its tesla.com source and an explicit list of unverified points. The cabin layout derives the dash, seat H-points, steering, screen, console, door trims and eye points from the body surface. Seats are built with bolsters, stitching and integrated head restraints. Displays use generated canvas textures (a generic UI, not Tesla's). Interior cameras: driver, passenger, rear, dashboard, steering, screen, console, with a 62° lens, a 1 cm near plane, tight orbit limits and adjustable cabin lighting.
 - `src/components/three/stage.tsx`: aspect-aware camera presets (3/4, front, side, rear, top, interior), contact shadows, floor glow and red rim lights. `studio-environment.tsx` bakes the overhead softboxes, flank strips and red accent wall into a PMREM map once (no HDR download).
 - `energy-flow.tsx`: instanced particles along Catmull-Rom paths, battery → inverter → motor → wheels (reversed for regen).
 
-`tests/unit/car-design.test.ts` checks that each design stays within its published length, width and height, that the wheels clear the arches, that the greenhouse stays inside the body, and that every mesh, including each opening state, builds without NaNs.
+Per-car sources, what is represented and what is not are listed in [`docs/vehicle-reference.md`](docs/vehicle-reference.md).
+
+`tests/unit/cabin.test.ts` checks that seat counts match each spec, seats and eye points stay inside the body and under the roof, the wheel, dash and screen are packaged ahead of the driver, and every interior camera preset is finite. `tests/unit/car-design.test.ts` checks that each design stays within its published length, width and height, that the wheels clear the arches, that the greenhouse stays inside the body, and that every mesh, including each opening state, builds without NaNs.
 
 **Adding a licensed model (not wired yet):** each family in `src/data/vehicles/families.ts` has an `asset` slot (`url`, `license`, `author`, `sourceUrl`). Compress GLBs with `gltf-transform` (Draco or Meshopt geometry, KTX2 textures), place them in `public/models/`, register them there, and render them with drei's `useGLTF` in place of `ProceduralVehicle`. Name sub-meshes after the `ComponentId`s so the selection, x-ray and explode logic keep working. Record the licence (CC-BY, CC0 or a commercial licence that permits redistribution in a public web app) and attribution below. `next.config.ts` already serves `/models`, `/textures` and `/environments` with long cache headers, so use versioned file names.
 
@@ -122,11 +125,27 @@ Live at **https://teslha.onrender.com** (Render free web service, created from `
 
 **Manual Deploy → Deploy latest commit** still works for redeploying without a push. The app also runs on any Node host (`npm run build && npm start`) or Vercel with no extra configuration.
 
+## Geometry validation
+
+Seats, steering, doors and the roof are solved against sampled body surfaces and checked per model by automated tests. See [docs/geometry-validation.md](docs/geometry-validation.md). Add `?debug=geometry` to a studio URL to see the overlay.
+
+## Security
+
+- No secrets or API keys: the app reads no environment variables at runtime, and all data is bundled at build time.
+- Response headers (`next.config.ts`):
+  - **Content Security Policy:** same-origin scripts, styles, fonts and connections; `blob:`/`data:` allowed for WebGL textures; no `object-src`; `frame-ancestors 'none'`.
+  - **Others:** HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a strict `Referrer-Policy`, a `Permissions-Policy` that allows only full screen, and `Cross-Origin-Opener-Policy`. The `X-Powered-By` header is removed.
+- Inline scripts are allowed (`'unsafe-inline'`), because a nonce-based CSP would force every page to render per request. The site has no auth, forms or user data, so the static-friendly policy is the documented trade-off (see the Next.js CSP guide).
+- Untrusted input is limited to URL query strings (`compare?ids=`, `engineering?component=`, units and currency). Each is checked against the list of known IDs and anything unknown is dropped (compare falls back to its defaults; the comparison is capped at 5). Unknown model slugs return 404 from `proxy.ts`.
+- The only API route is `/api/health`. It takes no input and returns no data beyond uptime, so it has no rate limiting.
+- `npm audit`: **0** production vulnerabilities. 8 moderate findings sit in dev-only lint tooling (`minimatch` via `eslint-config-next`); they are not shipped and are tracked for the next `eslint-config-next` release.
+
 ## Known limitations
 
 - Vehicle bodies are stylised approximations from published dimensions, not production surfaces. Details such as exact light signatures, panel gaps, grille-less fascias and badge-level styling are simplified. Component placement is schematic.
 - No licensed GLB models are bundled, so the Draco/Meshopt loading path is documented but not wired up.
-- Interior is a simplified seat and dash layout, not a detailed cabin.
+- Interiors are built from primitives (no upholstery scans). Seat counts, displays, steering type and lighting follow the official pages; exact trim shapes do not.
+- The interior camera stays inside the cabin through tight orbit limits rather than full collision detection.
 - Prices and some top speeds remain `secondary`: tesla.com shows financing offers rather than a stable cash MSRP. Tesla changes trims and prices frequently, so re-verify before relying on any figure.
 - No DC charging curves yet: no dataset with documented test conditions has been added.
 - Per-trim EPA consumption (Wh/mi) is not yet in the dataset, so cost comparisons apply one assumed consumption to every EV (stated wherever it is used).
