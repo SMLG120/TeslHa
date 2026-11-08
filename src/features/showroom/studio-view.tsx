@@ -13,7 +13,7 @@ import { useLowPower } from "@/hooks/use-device";
 import { useStudio } from "@/stores/studio";
 import { bodyFor, families, getConfigurations, getFamily } from "@/data/vehicles";
 import { DESIGNS } from "@/lib/car-design/designs";
-import { Segmented, StudioControls, VIEWS } from "./studio-controls";
+import { Segmented, StudioControls, VIEWS, interiorViewsFor } from "./studio-controls";
 import { TrimBars, TrimMetrics } from "./trim-metrics";
 import { cn } from "@/lib/utils";
 import type { Configuration, SpecKey } from "@/types/vehicle";
@@ -135,6 +135,17 @@ export function StudioView({ familyId: initialFamily }: { familyId: string }) {
           </header>
 
           <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-2 p-3 sm:p-4">
+            {s.view === "interior" && (
+              <Segmented
+                label="Interior camera"
+                hideLabel
+                options={interiorViewsFor(DESIGNS[body.design].cabin)}
+                value={s.interiorView}
+                onChange={(v) => s.setInteriorView(v)}
+                scrollable
+                className="glass w-full max-w-[520px] overflow-x-auto rounded-2xl [scrollbar-width:none]"
+              />
+            )}
             <Segmented label="Camera view" hideLabel options={VIEWS} value={s.view} onChange={(v) => s.setView(v)} className="glass w-full max-w-[440px] rounded-2xl" />
             <p className="hidden items-center gap-1.5 font-mono text-[10px] text-mist sm:flex">
               <Info className="h-3 w-3 text-amber" aria-hidden="true" />

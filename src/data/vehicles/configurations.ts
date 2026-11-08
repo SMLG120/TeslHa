@@ -380,7 +380,8 @@ export const CONFIGURATIONS: Configuration[] = [
     market: "US",
     drivetrain: "AWD",
     motors: 3,
-    seats: 4,
+    // tesla.com/roadster (Nov 2026): Performance and Thrust trims list "seating for two" (the 2017 reveal showed a 2+2).
+    seats: 2,
     status: "announced",
     wheelsIn: null,
     specs: {

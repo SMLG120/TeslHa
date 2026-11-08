@@ -1,10 +1,12 @@
 "use client";
 
-import { CarFront, DoorOpen, Layers, Lightbulb, Moon, Rotate3d, ScanEye, Sun, Zap } from "lucide-react";
+import { Armchair, CarFront, DoorOpen, Layers, Lightbulb, Moon, Rotate3d, ScanEye, Sun, Zap } from "lucide-react";
 import { PAINTS, useStudio, type CameraView, type RenderMode } from "@/stores/studio";
 import { COMPONENTS } from "@/data/components";
 import { cn } from "@/lib/utils";
 import type { BodyGeometry } from "@/types/vehicle";
+import { DESIGNS, type CabinSpec } from "@/lib/car-design/designs";
+import type { CabinLight, InteriorView } from "@/lib/car-design/cabin";
 
 export const VIEWS: { id: CameraView; label: string }[] = [
   { id: "hero", label: "3/4" },
@@ -13,6 +15,26 @@ export const VIEWS: { id: CameraView; label: string }[] = [
   { id: "rear", label: "Rear" },
   { id: "top", label: "Top" },
   { id: "interior", label: "Interior" },
+];
+
+/** Interior camera presets offered for a cabin; options a cabin lacks (rear row, centre screen) are omitted. */
+export function interiorViewsFor(cabin: CabinSpec): { id: InteriorView; label: string }[] {
+  const all: { id: InteriorView; label: string; show: boolean }[] = [
+    { id: "driver", label: "Driver", show: true },
+    { id: "passenger", label: "Passenger", show: true },
+    { id: "rear", label: "Rear", show: cabin.rows.length > 1 },
+    { id: "dashboard", label: "Dash", show: true },
+    { id: "steering", label: cabin.steering === "yoke" ? "Yoke" : "Wheel", show: true },
+    { id: "screen", label: "Screen", show: cabin.screen !== null },
+    { id: "console", label: "Console", show: true },
+  ];
+  return all.filter((v) => v.show).map(({ id, label }) => ({ id, label }));
+}
+
+const CABIN_LIGHTS: { id: CabinLight; label: string }[] = [
+  { id: "off", label: "Off" },
+  { id: "soft", label: "Soft" },
+  { id: "bright", label: "Bright" },
 ];
 
 const MODES: { id: RenderMode; label: string }[] = [
@@ -28,6 +50,7 @@ export function Segmented<T extends string>({
   onChange,
   hideLabel = false,
   className,
+  scrollable = false,
 }: {
   label: string;
   options: { id: T; label: string }[];
@@ -35,11 +58,17 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
   hideLabel?: boolean;
   className?: string;
+  /** Buttons keep their natural width and the row scrolls sideways on narrow screens. */
+  scrollable?: boolean;
 }) {
   return (
     <div className={className}>
       {!hideLabel && <p className="hud-label mb-2">{label}</p>}
-      <div role="radiogroup" aria-label={label} className="grid auto-cols-fr grid-flow-col gap-1 rounded-xl bg-white/[0.04] p-1 ring-1 ring-white/10">
+      <div
+        role="radiogroup"
+        aria-label={label}
+        className={cn("grid grid-flow-col gap-1 rounded-xl bg-white/[0.04] p-1 ring-1 ring-white/10", scrollable ? "w-max min-w-full auto-cols-max" : "auto-cols-fr")}
+      >
         {options.map((o) => (
           <button
             key={o.id}
@@ -47,7 +76,7 @@ export function Segmented<T extends string>({
             role="radio"
             aria-checked={value === o.id}
             onClick={() => onChange(o.id)}
-            className={cn("rounded-lg px-2 py-1.5 text-xs text-fog transition hover:text-white", value === o.id && "bg-white/10 text-white ring-1 ring-white/15")}
+            className={cn("whitespace-nowrap rounded-lg px-2 py-1.5 text-xs text-fog transition hover:text-white", value === o.id && "bg-white/10 text-white ring-1 ring-white/15")}
           >
             {o.label}
           </button>
@@ -92,6 +121,7 @@ export function StudioControls({ body }: { body: BodyGeometry }) {
   const paint = PAINTS.find((p) => p.id === s.paint)!;
   const doorLabel = body.doorStyle === "falcon" ? "Doors (falcon-wing)" : body.doorStyle === "coupe" ? "Doors" : "Doors";
   const inspecting = s.showComponents || s.mode === "xray";
+  const cabin = DESIGNS[body.design].cabin;
   return (
     <div className="space-y-6">
       <Section title="Paint">
@@ -131,6 +161,19 @@ export function StudioControls({ body }: { body: BodyGeometry }) {
         </div>
       </Section>
 
+      <Section title="Interior">
+        <div className="grid grid-cols-2 gap-2">
+          <Toggle label="Enter cabin" icon={Armchair} on={s.view === "interior"} onChange={(on) => (on ? s.setInteriorView(s.interiorView) : s.setView("hero"))} />
+          <Segmented label="Cabin light" hideLabel options={CABIN_LIGHTS} value={s.cabinLight} onChange={(cabinLight) => s.set({ cabinLight })} />
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-mist">
+          Shown: {cabin.rows.reduce((a, b) => a + b, 0)}-seat layout · {cabin.steering === "yoke" ? "yoke" : "round wheel"}
+          {cabin.screen ? ` · ${cabin.screen.diagIn}" centre screen` : " · no centre screen"}
+          {cabin.cluster ? " · driver display" : ""}
+          {cabin.rearScreen ? " · rear display" : ""} · {cabin.upholstery.label} trim
+        </p>
+      </Section>
+
       <Section title="Scene">
         <div className="grid grid-cols-2 gap-2">
           <Toggle label="Studio" icon={Sun} on={s.environment === "studio"} onChange={() => s.set({ environment: "studio" })} />
@@ -146,7 +189,9 @@ export function StudioControls({ body }: { body: BodyGeometry }) {
         </div>
         {inspecting && (
           <div className="mt-3">
-            <p className="mb-2 text-[11px] text-mist">Select a component to focus the camera on it.</p>
+            <p className="mb-2 text-[11px] text-mist">
+              Select a component to focus the camera on it. Placement and shapes are schematic, not a verified mechanical digital twin.
+            </p>
             <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Inspect component">
               {COMPONENTS.map((c) => (
                 <button

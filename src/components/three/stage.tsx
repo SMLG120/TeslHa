@@ -8,6 +8,7 @@ import { StudioEnvironment } from "./studio-environment";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import type { CameraView, Environment as Env } from "@/stores/studio";
 import type { VehicleLayout } from "./vehicle-geometry";
+import { SEAT_VIEWS, type InteriorView } from "@/lib/car-design/cabin";
 
 export type Quality = "high" | "medium" | "low";
 
@@ -22,6 +23,46 @@ interface StageProps {
   camera?: { position: [number, number, number]; fov?: number };
   ariaLabel: string;
   frameloop?: "always" | "demand";
+  /** Bloom suits the exterior lamps; inside the cabin it turns screens and trim lights into glare. */
+  bloom?: boolean;
+}
+
+/**
+ * `?perf=1` publishes renderer counters on <html data-perf> once a second (used by
+ * scripts/perf.mjs to record draw calls, triangles and GPU resources). Inert otherwise.
+ */
+function PerfProbe() {
+  const gl = useThree((st) => st.gl);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("perf") !== "1") return;
+    let frames = 0;
+    let last = performance.now();
+    let raf = 0;
+    const tick = () => {
+      frames++;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const { render, memory } = gl.info;
+      document.documentElement.dataset.perf = JSON.stringify({
+        fps: Math.round((frames * 1000) / (now - last)),
+        calls: render.calls,
+        triangles: render.triangles,
+        geometries: memory.geometries,
+        textures: memory.textures,
+        programs: gl.info.programs?.length ?? 0,
+      });
+      frames = 0;
+      last = now;
+    }, 1000);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearInterval(id);
+    };
+  }, [gl]);
+  return null;
 }
 
 /** `?q=low|medium|high` forces a render quality (debugging, screenshots, slow GPUs). */
@@ -31,7 +72,7 @@ function qualityOverride(): Quality | null {
   return q === "low" || q === "medium" || q === "high" ? q : null;
 }
 
-export function Stage({ children, environment = "studio", quality: requestedQuality = "high", className, onReady, onProgress, camera, ariaLabel, frameloop = "always" }: StageProps) {
+export function Stage({ children, environment = "studio", quality: requestedQuality = "high", className, onReady, onProgress, camera, ariaLabel, frameloop = "always", bloom = true }: StageProps) {
   const [initialQuality] = useState<Quality>(() => qualityOverride() ?? requestedQuality);
   const [quality, setQuality] = useState<Quality>(initialQuality);
   const [dpr, setDpr] = useState<number>(initialQuality === "low" ? 1 : 1.5);
@@ -64,8 +105,9 @@ export function Stage({ children, environment = "studio", quality: requestedQual
         <StudioLights night={night} quality={quality} />
         {children}
         <Floor quality={quality} night={night} />
+        <PerfProbe />
 
-        {quality === "high" && (
+        {bloom && quality === "high" && (
           <EffectComposer multisampling={4}>
             {/* N8AO was removed: n8ao 2.0.1's multi-render-target subclass is incompatible with three r187
                 (renderTarget.textures is undefined → crash every frame). Contact shadows provide grounding. */}
@@ -73,7 +115,7 @@ export function Stage({ children, environment = "studio", quality: requestedQual
             <Vignette eskil={false} offset={0.18} darkness={0.75} />
           </EffectComposer>
         )}
-        {quality === "medium" && (
+        {bloom && quality === "medium" && (
           <EffectComposer multisampling={0}>
             <Bloom mipmapBlur luminanceThreshold={1} intensity={0.6} />
           </EffectComposer>
@@ -203,11 +245,11 @@ const VIEW_MARGIN: Record<Exclude<CameraView, "interior">, number> = { hero: 1.1
  * bounding box to the actual canvas aspect and field of view, so every model is fully
  * visible and similarly sized on any screen.
  */
-export function cameraPreset(view: CameraView, l: VehicleLayout, aspect = 16 / 9, fovDeg = 30): { pos: [number, number, number]; target: [number, number, number] } {
-  const { L, H, W, frontAxleX, rearAxleX } = l;
+export function cameraPreset(view: CameraView, l: VehicleLayout, aspect = 16 / 9, fovDeg = 30, interiorView: InteriorView = "driver"): { pos: [number, number, number]; target: [number, number, number] } {
+  const { L, H, W } = l;
   if (view === "interior") {
-    const mid = (frontAxleX + rearAxleX) / 2;
-    return { pos: [mid - 0.1, H * 0.74, -W * 0.18], target: [L / 2, H * 0.6, -W * 0.18] };
+    const v = l.cabin.views[interiorView];
+    return { pos: v.pos, target: v.target };
   }
   const target = new THREE.Vector3(0, view === "top" ? 0 : H * 0.42, 0);
   const dir = new THREE.Vector3(...VIEW_DIRS[view]).normalize();
@@ -231,6 +273,9 @@ export function cameraPreset(view: CameraView, l: VehicleLayout, aspect = 16 / 9
   return { pos: [pos.x, pos.y, pos.z], target: [target.x, target.y, target.z] };
 }
 
+/** Vertical field of view inside the cabin (degrees): wide enough to read the whole dash. */
+const INTERIOR_FOV = 62;
+
 /** Smoothly animated orbit camera. `focus` overrides presets (used for component selection). */
 export function CameraRig({
   view,
@@ -242,8 +287,10 @@ export function CameraRig({
   maxDistance = 16,
   enabled = true,
   focalOffset,
+  interiorView = "driver",
 }: {
   view: CameraView;
+  interiorView?: InteriorView;
   nonce: number;
   layout: VehicleLayout;
   focus?: THREE.Vector3 | null;
@@ -257,7 +304,10 @@ export function CameraRig({
   const ref = useRef<CameraControls>(null);
   const [fx, fy, fz] = focalOffset ?? [0, 0, 0];
   const aspect = useThree((st) => st.size.width / Math.max(st.size.height, 1));
-  const fov = useThree((st) => (st.camera as THREE.PerspectiveCamera).fov ?? 30);
+  const camera = useThree((st) => st.camera);
+  // Exterior framing uses the scene's own lens; the cabin switches to a wide lens.
+  const [fov] = useState(() => (camera as THREE.PerspectiveCamera).fov ?? 30);
+  const seatView = view === "interior" && SEAT_VIEWS.includes(interiorView);
 
   useEffect(() => {
     void ref.current?.setFocalOffset(fx, fy, fz, true);
@@ -273,9 +323,15 @@ export function CameraRig({
       void c.setLookAt(pos.x, pos.y, pos.z, focus.x, focus.y, focus.z, true);
       return;
     }
-    const p = cameraPreset(view, layout, aspect, fov);
+    const p = cameraPreset(view, layout, aspect, fov, interiorView);
+    const inside = view === "interior";
+    // Interior: a 1 cm near plane so close-up surfaces never clip.
+    const cam = camera as THREE.PerspectiveCamera;
+    cam.near = inside ? 0.01 : 0.05;
+    cam.fov = inside ? INTERIOR_FOV : fov;
+    cam.updateProjectionMatrix();
     void c.setLookAt(...p.pos, ...p.target, true);
-  }, [view, nonce, layout, focus, aspect, fov]);
+  }, [view, interiorView, nonce, layout, focus, aspect, fov, camera]);
 
   useEffect(() => {
     const c = ref.current;
@@ -297,9 +353,10 @@ export function CameraRig({
       ref={ref}
       enabled={enabled}
       makeDefault
-      minDistance={minDistance}
-      maxDistance={maxDistance}
-      maxPolarAngle={view === "interior" ? Math.PI : Math.PI / 2.05}
+      minDistance={view === "interior" ? (seatView ? 0.1 : 0.15) : minDistance}
+      maxDistance={view === "interior" ? (seatView ? 0.3 : 0.75) : maxDistance}
+      maxPolarAngle={view === "interior" ? Math.PI * 0.85 : Math.PI / 2.05}
+      minPolarAngle={view === "interior" ? Math.PI * 0.15 : 0}
       smoothTime={0.6}
       draggingSmoothTime={0.15}
     />

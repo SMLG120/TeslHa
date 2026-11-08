@@ -28,7 +28,7 @@ test("homepage hero loads the 3D scene and switches vehicles", async ({ page }) 
   await page.goto("/?q=low");
   await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("radio", { name: "Model X" }).click();
-  await expect(page.getByText("Seven seats, falcon-wing doors")).toBeVisible();
+  await expect(page.getByText("Three rows, falcon-wing doors")).toBeVisible();
 });
 
 test("studio toggles update control state", async ({ page }) => {
@@ -53,6 +53,21 @@ test("studio switches models without a page reload", async ({ page }) => {
   await expect(page).toHaveURL(/\/studio\/model-x$/);
   await expect(page.getByRole("heading", { level: 1, name: "Model X" })).toBeVisible();
   await expect(page.locator("canvas")).toBeVisible();
+});
+
+test("interior explorer switches cabin cameras", async ({ page }) => {
+  await page.goto("/studio/model-s?q=low");
+  await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("radiogroup", { name: "Camera view" }).getByRole("radio", { name: "Interior" }).click();
+  const cabin = page.getByRole("radiogroup", { name: "Interior camera" });
+  await expect(cabin).toBeVisible();
+  for (const name of ["Passenger", "Rear", "Dash", "Yoke", "Screen", "Console", "Driver"]) {
+    await cabin.getByRole("radio", { name }).click();
+    await expect(cabin.getByRole("radio", { name })).toHaveAttribute("aria-checked", "true");
+  }
+  // Two-seat cars offer no rear-seat camera.
+  await page.getByRole("navigation", { name: "Choose a vehicle" }).getByRole("button", { name: "Roadster" }).click();
+  await expect(page.getByRole("radiogroup", { name: "Interior camera" }).getByRole("radio", { name: "Rear" })).toHaveCount(0);
 });
 
 test("engineering deep link opens the component panel", async ({ page }) => {

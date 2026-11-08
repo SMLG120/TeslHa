@@ -53,6 +53,8 @@ export function monotone(points: Curve): (x: number) => number {
 /** Signed superellipse term: sgn(a)·|a|^(2/n). */
 const se = (a: number, n: number) => Math.sign(a) * Math.pow(Math.abs(a), 2 / n);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+/** Length (in t) over which the glass blends onto the body at the windshield base and tail. */
+const GLASS_END_BLEND = 0.03;
 
 export interface Section {
   x: number;
@@ -76,6 +78,11 @@ export class CarSurface {
   readonly tRearAxle: number;
   readonly archR: number;
   readonly glass: readonly [number, number];
+  /**
+   * Body-ring parameter where the greenhouse meets the paint (right side; the left side is 1 − beltU).
+   * The body cut-out, the door tops and the glass base all use this one line, so they cannot drift apart.
+   */
+  readonly beltU: number;
   private readonly topFn: (t: number) => number;
   private readonly roofFn: (t: number) => number;
   private readonly planFn: (t: number) => number;
@@ -108,6 +115,19 @@ export class CarSurface {
     const roof = d.roof.map(([t, y], i) => [t, i === 0 || i === d.roof.length - 1 ? this.topFn(t) : y] as const);
     this.roofFn = monotone(roof);
     this.glass = [roof[0][0], roof[roof.length - 1][0]];
+    this.beltU = this.findBeltU();
+  }
+
+  /** First u (walking up the flank at mid-cabin) that reaches the beltline or the design's cabin half-width. */
+  private findBeltU() {
+    const tMid = (this.glass[0] + this.glass[1]) / 2;
+    const belt = this.topFn(tMid);
+    const maxZ = this.design.beltHalfWidth ?? 0;
+    for (let u = 0.25; u < 0.49; u += 0.0025) {
+      const [, y, z] = this.body(tMid, u);
+      if (y >= belt - 0.03 || z <= maxZ) return u;
+    }
+    return 0.49;
   }
 
   xAt(t: number) {
@@ -183,34 +203,43 @@ export class CarSurface {
     return [sec.x, y, z];
   }
 
-  /** Half-width of the body surface at height y (upper half only), used to seat the greenhouse. */
+  /** Half-width of the painted body at height y (exact inverse of the section shape in `body`). */
   bodyHalfWidthAtY(t: number, y: number) {
     const sec = this.section(t);
     const d = this.design;
-    if (y >= sec.top) return 0;
-    if (y <= sec.shoulder) return sec.halfWidth;
-    const r = (y - sec.shoulder) / (sec.top - sec.shoulder);
-    const s = Math.pow(clamp01(r), d.nTop / 2);
+    if (y >= sec.top || y <= sec.bottom) return 0;
+    const upper = y >= sec.shoulder;
+    const r = upper ? (y - sec.shoulder) / (sec.top - sec.shoulder) : (sec.shoulder - y) / (sec.shoulder - sec.bottom);
+    const s = Math.pow(clamp01(r), (upper ? d.nTop : d.nBottom) / 2);
     const c = Math.sqrt(Math.max(0, 1 - s * s));
-    return sec.halfWidth * se(c, d.nSide) * (1 - 0.05 * s * s);
+    return sec.halfWidth * se(c, d.nSide) * (1 - (upper ? 0.05 : 0.12) * s * s);
   }
 
-  /** Point on the greenhouse (glass) at (t, v). */
+  /** Point on the belt junction at t (right side): shared by the body cut-out and the glass base. */
+  beltPoint(t: number): Vec3 {
+    return this.body(t, this.beltU);
+  }
+
+  /**
+   * Point on the greenhouse (glass) at (t, v). The base is exactly the belt junction; over the last
+   * few percent at each end the surface blends onto the body top so the seal has no gap.
+   */
   glassAt(t: number, v: number): Vec3 {
-    const x = this.xAt(t);
-    const sink = 0.025;
-    const belt = this.topFn(t);
-    const base = belt - sink;
-    const roof = this.roofAt(t);
-    const hwBase = Math.max(0.05, this.bodyHalfWidthAtY(t, base) - 0.012);
-    const hwTop = hwBase * this.design.tumblehome;
-    const th = clamp01(v) * Math.PI;
+    const sec = this.section(t);
+    const [x, base, hwBase] = this.body(t, this.beltU, sec);
+    const roof = Math.max(this.roofAt(t), base);
+    const vv = clamp01(v);
+    const th = vv * Math.PI;
     const c = Math.cos(th);
     const s = Math.sin(th);
-    const lift = se(s, 3.2);
-    const y = base + (roof - base) * lift;
-    const hw = hwBase + (hwTop - hwBase) * Math.pow(s, 1.6);
-    return [x, Math.max(base, y), hw * se(c, 3.2)];
+    const y = base + (roof - base) * se(s, 3.2);
+    const hw = hwBase + (hwBase * this.design.tumblehome - hwBase) * Math.pow(s, 1.6);
+    const z = hw * se(c, 3.2);
+    const edge = Math.min(t - this.glass[0], this.glass[1] - t) / GLASS_END_BLEND;
+    if (edge >= 1) return [x, y, z];
+    const k = edge <= 0 ? 0 : edge * edge * (3 - 2 * edge);
+    const seal = this.body(t, this.beltU + (1 - 2 * this.beltU) * vv, sec);
+    return [x, seal[1] + (y - seal[1]) * k, seal[2] + (z - seal[2]) * k];
   }
 
   /** Numerical outward normal of a parametric surface. */
