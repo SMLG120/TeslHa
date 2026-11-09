@@ -28,7 +28,20 @@ test("homepage hero loads the 3D scene and switches vehicles", async ({ page }) 
   await page.goto("/?q=low");
   await expect(page.locator("canvas")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("radio", { name: "Model X" }).click();
-  await expect(page.getByText("Three rows, falcon-wing doors")).toBeVisible();
+  // Generous timeout: the hero GLB blocks the main thread while it compiles under software WebGL.
+  await expect(page.getByText("Three rows, falcon-wing doors")).toBeVisible({ timeout: 30_000 });
+});
+
+test("homepage hero shows the licensed Roadster model with its credit", async ({ page }) => {
+  const blocked: string[] = [];
+  page.on("console", (m) => {
+    if (/Content Security Policy/i.test(m.text())) blocked.push(m.text());
+  });
+  const glb = page.waitForResponse((r) => r.url().endsWith("/models/tesla_roadster.glb"), { timeout: 30_000 });
+  await page.goto("/?q=low");
+  expect((await glb).status()).toBe(200);
+  await expect(page.getByRole("link", { name: "CC BY 4.0" })).toBeVisible({ timeout: 60_000 });
+  expect(blocked).toEqual([]);
 });
 
 test("studio toggles update control state", async ({ page }) => {

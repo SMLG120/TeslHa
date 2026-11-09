@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMediaQuery } from "@/hooks/use-device";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { Stage, CameraRig } from "@/components/three/stage";
 import { ProceduralVehicle } from "@/components/three/procedural-vehicle";
+import { GlbVehicle } from "@/components/three/glb-vehicle";
+import { SceneErrorBoundary } from "@/components/three/webgl-guard";
 import { computeLayout } from "@/components/three/vehicle-geometry";
 import { getFamily, bodyFor } from "@/data/vehicles";
 import type { VehicleId } from "@/types/vehicle";
@@ -27,6 +29,14 @@ export default function HeroScene({ vehicleId, paint, lowPower, reducedMotion, o
   const body = bodyFor(family, family.id === "roadster" ? "gen2" : undefined);
   const layout = useMemo(() => computeLayout(body), [body]);
   const wide = useMediaQuery("(min-width: 1024px)");
+  const assetUrl = family.asset?.url;
+  // The detailed model is the page's centrepiece: frame it so it clears the headline at every turntable angle.
+  const frame = useMemo(() => (assetUrl && wide ? { ...layout, L: layout.L * 1.5, W: layout.L } : layout), [assetUrl, wide, layout]);
+  const procedural = <ProceduralVehicle body={body} paint={paint} headlights lowDetail={lowPower} />;
+
+  useEffect(() => {
+    if (assetUrl) onProgress("Loading 3D model", 40);
+  }, [assetUrl, onProgress]);
 
   return (
     <Stage
@@ -35,12 +45,19 @@ export default function HeroScene({ vehicleId, paint, lowPower, reducedMotion, o
       onReady={onReady}
       onProgress={onProgress}
       camera={{ position: [5.5, 1.6, 5.8], fov: 30 }}
-      ariaLabel={`Rotating 3D procedural representation of the ${family.name}`}
+      ariaLabel={`Rotating 3D ${assetUrl ? "model" : "procedural representation"} of the ${family.name}`}
     >
       <Swapper target={vehicleId} shown={shown} onSwap={setShown} reducedMotion={reducedMotion}>
-        <ProceduralVehicle body={body} paint={paint} headlights lowDetail={lowPower} />
+        {assetUrl ? (
+          // No local Suspense: the preloader stays up until the model is ready. A failed download falls back to the procedural car.
+          <SceneErrorBoundary fallback={procedural}>
+            <GlbVehicle url={assetUrl} length={layout.L} paint={paint} />
+          </SceneErrorBoundary>
+        ) : (
+          procedural
+        )}
       </Swapper>
-      <CameraRig view="hero" nonce={0} layout={layout} autoRotate={!reducedMotion} minDistance={4} maxDistance={12} focalOffset={wide ? [-1.1, 0.2, 0] : [0, -0.5, 0]} />
+      <CameraRig view="hero" nonce={0} layout={frame} autoRotate={!reducedMotion} minDistance={4} maxDistance={12} focalOffset={wide ? [assetUrl ? -1.7 : -1.1, 0.2, 0] : [0, -0.5, 0]} />
     </Stage>
   );
 }

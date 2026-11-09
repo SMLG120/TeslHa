@@ -91,7 +91,7 @@ export const VehicleFamilySchema = z.object({
   body: BodyGeometrySchema,
   /** Optional licensed GLB. When absent, the procedural representation is rendered and labelled as such. */
   asset: z
-    .object({ url: z.string(), license: z.string(), author: z.string(), sourceUrl: z.url() })
+    .object({ url: z.string(), title: z.string(), license: z.string(), licenseUrl: z.url(), author: z.string(), sourceUrl: z.url() })
     .nullable(),
   /** Implementation depth of the procedural rig. Model S is the reference implementation. */
   rigLevel: z.enum(["full", "standard"]),
