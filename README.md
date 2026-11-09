@@ -49,7 +49,7 @@ Per-car sources, what is represented and what is not are listed in [`docs/vehicl
 
 `tests/unit/cabin.test.ts` checks that seat counts match each spec, seats and eye points stay inside the body and under the roof, the wheel, dash and screen are packaged ahead of the driver, and every interior camera preset is finite. `tests/unit/car-design.test.ts` checks that each design stays within its published length, width and height, that the wheels clear the arches, that the greenhouse stays inside the body, and that every mesh, including each opening state, builds without NaNs.
 
-**Adding a licensed model (not wired yet):** each family in `src/data/vehicles/families.ts` has an `asset` slot (`url`, `license`, `author`, `sourceUrl`). Compress GLBs with `gltf-transform` (Draco or Meshopt geometry, KTX2 textures), place them in `public/models/`, register them there, and render them with drei's `useGLTF` in place of `ProceduralVehicle`. Name sub-meshes after the `ComponentId`s so the selection, x-ray and explode logic keep working. Record the licence (CC-BY, CC0 or a commercial licence that permits redistribution in a public web app) and attribution below. `next.config.ts` already serves `/models`, `/textures` and `/environments` with long cache headers, so use versioned file names.
+**Adding a licensed model:** the homepage hero renders the Roadster's registered GLB through `src/components/three/glb-vehicle.tsx`; the studio still uses the procedural rig. each family in `src/data/vehicles/families.ts` has an `asset` slot (`url`, `license`, `author`, `sourceUrl`). Compress GLBs with `gltf-transform` (Draco or Meshopt geometry, KTX2 textures), place them in `public/models/`, register them there, and render them with drei's `useGLTF` in place of `ProceduralVehicle`. Name sub-meshes after the `ComponentId`s so the selection, x-ray and explode logic keep working. Record the licence (CC-BY, CC0 or a commercial licence that permits redistribution in a public web app) and attribution below. `next.config.ts` already serves `/models`, `/textures` and `/environments` with long cache headers, so use versioned file names.
 
 ## Architecture
 
@@ -155,7 +155,7 @@ Seats, steering, doors and the roof are solved against sampled body surfaces and
 
 ## Asset licensing & attribution
 
-All 3D geometry is generated procedurally at runtime by this project's code. No third-party models, textures or HDRIs are used. Fonts: Geist and Geist Mono (SIL OFL), Michroma (SIL OFL), via `next/font/google`. Icons: Lucide (ISC).
+The homepage hero's Roadster is ["Tesla Roadster"](https://sketchfab.com/3d-models/tesla-roadster-6ad8555df20f4f56985de23a587998cb) by GT Cars, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). It is scaled and repositioned, its paint is recolourable and its glass tint is changed. All other 3D geometry is generated procedurally at runtime by this project's code. No other third-party models, textures or HDRIs are used. Fonts: Geist and Geist Mono (SIL OFL), Michroma (SIL OFL), via `next/font/google`. Icons: Lucide (ISC).
 
 ## Sources
 

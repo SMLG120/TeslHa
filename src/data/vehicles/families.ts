@@ -151,7 +151,15 @@ export const FAMILIES: VehicleFamily[] = [
     statusNote:
       "Next-generation figures are 2017 announcement targets, not production specs. Unveil dates have slipped repeatedly; reported production start is 2027.",
     body: ROADSTER_GEN1_BODY,
-    asset: null,
+    // Next-generation shape. Shown in the homepage hero; the studio keeps the procedural rig.
+    asset: {
+      url: "/models/tesla_roadster.glb",
+      title: "Tesla Roadster",
+      license: "CC BY 4.0",
+      licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+      author: "GT Cars",
+      sourceUrl: "https://sketchfab.com/3d-models/tesla-roadster-6ad8555df20f4f56985de23a587998cb",
+    },
     rigLevel: "standard",
     generations: [
       { id: "gen1", label: "1st generation (2008 – 2012)", body: ROADSTER_GEN1_BODY },

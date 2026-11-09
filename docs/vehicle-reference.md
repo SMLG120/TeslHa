@@ -1,6 +1,6 @@
 # Vehicle reference checklist
 
-Official pages reviewed on **8 November 2026** (tesla.com, US region). They were viewed in a browser for proportions and features only. No images or 3D assets were downloaded, extracted or reused. Every car in TeslHa is a **parametric procedural representation**, not manufacturer CAD.
+Official pages reviewed on **8 November 2026** (tesla.com, US region). They were viewed in a browser for proportions and features only. No images or 3D assets were downloaded, extracted or reused. Every car in the TeslHa studio is a **parametric procedural representation**, not manufacturer CAD. The homepage hero's Roadster is a third-party community model (GT Cars, CC BY 4.0; see the README), also not manufacturer CAD.
 
 Legend: ✅ represented · ◐ approximated · ✗ not represented · ⚠ unverified / conflicting source
 

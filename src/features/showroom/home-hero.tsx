@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 const HeroScene = dynamic(() => import("./hero-scene"), { ssr: false });
 
 export function HomeHero() {
-  const [vehicle, setVehicle] = useState<VehicleId>("model-s");
+  const [vehicle, setVehicle] = useState<VehicleId>("roadster");
   const [paint, setPaint] = useState<PaintId>("volt-red");
   const [ready, setReady] = useState(false);
   const [progress, setProgress] = useState({ stage: "Loading 3D engine", pct: 8 });
@@ -105,8 +105,21 @@ export function HomeHero() {
               <motion.div key={family.id} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} className="max-w-sm text-right">
                 <p className="text-sm font-medium">{family.tagline}</p>
                 <p className="mt-1 font-mono text-[11px] text-mist">
-                  {family.productionYears} · procedural representation
-                  {family.id === "roadster" ? " (next-gen, approximated)" : ""}
+                  {family.asset ? (
+                    <>
+                      3D model:{" "}
+                      <a href={family.asset.sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-white">
+                        &ldquo;{family.asset.title}&rdquo;
+                      </a>{" "}
+                      by {family.asset.author} ·{" "}
+                      <a href={family.asset.licenseUrl} target="_blank" rel="noreferrer" className="underline hover:text-white">
+                        {family.asset.license}
+                      </a>{" "}
+                      · scaled, recoloured
+                    </>
+                  ) : (
+                    `${family.productionYears} · procedural representation`
+                  )}
                 </p>
               </motion.div>
             </AnimatePresence>

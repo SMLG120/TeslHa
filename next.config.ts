@@ -14,7 +14,8 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self'",
-  "connect-src 'self'",
+  // blob: because GLTFLoader fetches a GLB's embedded textures through object URLs.
+  "connect-src 'self' blob:",
   "worker-src 'self' blob:",
   "media-src 'self'",
   "object-src 'none'",
