@@ -11,6 +11,7 @@ const glb = page.waitForResponse((r) => /\.glb$/.test(r.url()), { timeout: 60000
 await page.goto(url, { waitUntil: "domcontentloaded" });
 console.log("glb", JSON.stringify(await glb));
 await page.waitForTimeout(+wait);
-await page.screenshot({ path: out });
 console.log(errs.length ? errs.join("\n") : "no console errors");
+// A busy software-WebGL frame can block capture; report it instead of crashing before the errors print.
+await page.screenshot({ path: out, timeout: 60000 }).catch((e) => console.log("screenshot failed:", e.message.split("\n")[0]));
 await browser.close();
