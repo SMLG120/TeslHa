@@ -18,7 +18,7 @@ export const PAINTS = [
 ] as const;
 export type PaintId = (typeof PAINTS)[number]["id"];
 
-interface StudioState {
+export interface StudioState {
   paint: PaintId;
   view: CameraView;
   /** Bumped on every view request so re-selecting the same view re-animates the camera. */

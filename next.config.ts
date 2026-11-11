@@ -10,7 +10,8 @@ const isDev = process.env.NODE_ENV === "development";
  */
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  // wasm-unsafe-eval lets the meshopt decoder compile its WebAssembly; it does not allow JS eval.
+  `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self'",
@@ -42,9 +43,12 @@ const nextConfig: NextConfig = {
     // Optional licensed GLB / texture / HDR assets placed in public/. File names should be
     // versioned when replaced, so they can be cached for a long time.
     const longCache = [{ key: "Cache-Control", value: "public, max-age=2592000, stale-while-revalidate=86400" }];
+    // Vehicle GLBs are written by scripts/assets/prepare-glb.mjs with a content hash in the name
+    // (and the manifest schema only accepts such names), so a URL never changes content.
+    const immutable = [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }];
     return [
       { source: "/:path*", headers: securityHeaders },
-      { source: "/models/:path*", headers: longCache },
+      { source: "/models/:path*", headers: immutable },
       { source: "/textures/:path*", headers: longCache },
       { source: "/environments/:path*", headers: longCache },
     ];

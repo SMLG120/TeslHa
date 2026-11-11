@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VehicleAssetSchema } from "./asset";
 
 /**
  * How trustworthy a value is. Rendered as a badge next to every figure.
@@ -90,9 +91,7 @@ export const VehicleFamilySchema = z.object({
   statusNote: z.string(),
   body: BodyGeometrySchema,
   /** Optional licensed GLB. When absent, the procedural representation is rendered and labelled as such. */
-  asset: z
-    .object({ url: z.string(), title: z.string(), license: z.string(), licenseUrl: z.url(), author: z.string(), sourceUrl: z.url() })
-    .nullable(),
+  asset: VehicleAssetSchema.nullable(),
   /** Implementation depth of the procedural rig. Model S is the reference implementation. */
   rigLevel: z.enum(["full", "standard"]),
   /** Some families have distinct generations (Roadster 2008 vs announced next-gen). */

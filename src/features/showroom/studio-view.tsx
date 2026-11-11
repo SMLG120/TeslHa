@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, Crosshair, Info, Maximize2, Minimize2 } from "lucide-react";
 import { WithWebGL } from "@/components/three/webgl-guard";
+import { licensedAssetFor, licensedAssetsRequested } from "@/components/three/licensed-asset";
 import { SceneSkeleton } from "@/components/ui/primitives";
 import { CarSilhouette } from "@/components/vehicles/car-silhouette";
 import { AnimatedNumber } from "@/components/ui/animated-number";
@@ -147,10 +148,7 @@ export function StudioView({ familyId: initialFamily }: { familyId: string }) {
               />
             )}
             <Segmented label="Camera view" hideLabel options={VIEWS} value={s.view} onChange={(v) => s.setView(v)} className="glass w-full max-w-[440px] rounded-2xl" />
-            <p className="hidden items-center gap-1.5 font-mono text-[10px] text-mist sm:flex">
-              <Info className="h-3 w-3 text-amber" aria-hidden="true" />
-              Procedural representation · {DESIGNS[body.design].note.toLowerCase()} · not manufacturer CAD
-            </p>
+            <ModelCaption design={body.design} />
           </div>
         </section>
 
@@ -290,5 +288,35 @@ function HeadlineStats({ config }: { config: Configuration }) {
         );
       })}
     </dl>
+  );
+}
+
+/** Says what geometry is on screen: the procedural rig, or a credited licensed model (?assets=licensed). */
+function ModelCaption({ design }: { design: string }) {
+  const s = useStudio();
+  const [enabled, setEnabled] = useState(false);
+  // Read after mount so the server-rendered caption and the first client render match.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setEnabled(licensedAssetsRequested()), []);
+  const asset = licensedAssetFor(design, s, { enabled });
+  return (
+    <p className="hidden items-center gap-1.5 font-mono text-[10px] text-mist sm:flex">
+      <Info className="h-3 w-3 text-amber" aria-hidden="true" />
+      {asset ? (
+        <>
+          3D model:{" "}
+          <a href={asset.sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-white">
+            &ldquo;{asset.title}&rdquo;
+          </a>{" "}
+          by {asset.author} ·{" "}
+          <a href={asset.licenseUrl} target="_blank" rel="noreferrer" className="underline hover:text-white">
+            {asset.license}
+          </a>{" "}
+          · community model, not manufacturer CAD
+        </>
+      ) : (
+        <>Procedural representation · {DESIGNS[design as keyof typeof DESIGNS].note.toLowerCase()} · not manufacturer CAD</>
+      )}
+    </p>
   );
 }

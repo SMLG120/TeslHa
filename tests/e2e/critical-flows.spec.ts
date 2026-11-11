@@ -37,7 +37,7 @@ test("homepage hero shows the licensed Roadster model with its credit", async ({
   page.on("console", (m) => {
     if (/Content Security Policy/i.test(m.text())) blocked.push(m.text());
   });
-  const glb = page.waitForResponse((r) => r.url().endsWith("/models/tesla_roadster.glb"), { timeout: 30_000 });
+  const glb = page.waitForResponse((r) => /\/models\/roadster-gen2\.[0-9a-f]{8}\.glb$/.test(r.url()), { timeout: 30_000 });
   await page.goto("/?q=low");
   expect((await glb).status()).toBe(200);
   await expect(page.getByRole("link", { name: "CC BY 4.0" })).toBeVisible({ timeout: 60_000 });
@@ -111,4 +111,23 @@ test("unit switch converts range to km", async ({ page }) => {
   if (await menu.isVisible()) await menu.click();
   await page.getByRole("button", { name: "km" }).locator("visible=true").first().click();
   await expect(page.locator("main").getByText("km", { exact: true }).first()).toBeVisible();
+});
+
+test("studio keeps the procedural Roadster by default and shows the credited GLB behind ?assets=licensed", async ({ page }) => {
+  test.setTimeout(120_000);
+  const glbRequests: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().endsWith(".glb")) glbRequests.push(r.url());
+  });
+  await page.goto("/studio/roadster?q=low");
+  await expect(page.getByText(/Procedural representation/)).toBeVisible({ timeout: 30_000 });
+  expect(glbRequests).toEqual([]);
+
+  const glb = page.waitForResponse((r) => /\/models\/roadster-gen2\.[0-9a-f]{8}\.glb$/.test(r.url()), { timeout: 60_000 });
+  await page.goto("/studio/roadster?q=low&assets=licensed");
+  expect((await glb).status()).toBe(200);
+  await expect(page.getByRole("link", { name: "CC BY 4.0" })).toBeVisible({ timeout: 30_000 });
+  // The interior explorer needs the procedural cabin, and the caption must say so.
+  await page.getByRole("radio", { name: "Interior" }).first().click();
+  await expect(page.getByText(/Procedural representation/)).toBeVisible();
 });
