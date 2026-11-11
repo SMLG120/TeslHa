@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useStudio } from "@/stores/studio";
 import { Stage, CameraRig } from "@/components/three/stage";
 import { ProceduralVehicle } from "@/components/three/procedural-vehicle";
+import { GlbVehicle } from "@/components/three/glb-vehicle";
+import { SceneErrorBoundary } from "@/components/three/webgl-guard";
+import { licensedAssetFor, licensedAssetsRequested } from "@/components/three/licensed-asset";
 import { computeLayout } from "@/components/three/vehicle-geometry";
 import { DebugBridge, debugRequested } from "@/components/three/debug-bridge";
 import dynamic from "next/dynamic";
@@ -37,37 +40,53 @@ export default function VehicleScene({ body, name, motors, lowPower, engineering
 
   const exterior = s.view !== "interior";
   const [debug] = useState(debugRequested);
+  const [licensedFlag] = useState(licensedAssetsRequested);
+  const asset = licensedAssetFor(shown.design, s, { enabled: licensedFlag, engineering });
+  const showAsset = asset !== null;
+  const procedural = (
+    <ProceduralVehicle
+      body={shown}
+      paint={s.paint}
+      mode={s.mode}
+      headlights={s.headlights}
+      taillights={s.taillights}
+      doorsOpen={s.doorsOpen}
+      frunkOpen={s.frunkOpen}
+      trunkOpen={s.trunkOpen}
+      showComponents={engineering || s.showComponents}
+      exploded={s.exploded}
+      selected={s.selected}
+      onSelect={(id) => s.set({ selected: id })}
+      flow={s.flow}
+      motors={motors}
+      lowDetail={lowPower}
+      // Cabin lamps only when inside (or a door is open), as in a parked car.
+      cabinLight={s.view === "interior" || s.doorsOpen ? s.cabinLight : "off"}
+    />
+  );
+
   return (
     <Stage
       className="absolute inset-0"
       environment={s.environment}
       quality={lowPower ? "low" : "high"}
       camera={{ position: [6, 2, 7], fov: 30 }}
-      ariaLabel={`Interactive 3D procedural representation of the ${name}. Drag to orbit, scroll or pinch to zoom.`}
+      ariaLabel={`Interactive 3D ${showAsset ? "model" : "procedural representation"} of the ${name}. Drag to orbit, scroll or pinch to zoom.`}
       onReady={onReady}
       bloom={exterior}
     >
       <Swap target={body} shown={shown} onSwap={setShown} reduced={reduced}>
         <group onPointerMissed={() => (engineering || s.showComponents) && s.set({ selected: null })}>
-          <ProceduralVehicle
-            body={shown}
-            paint={s.paint}
-            mode={s.mode}
-            headlights={s.headlights}
-            taillights={s.taillights}
-            doorsOpen={s.doorsOpen}
-            frunkOpen={s.frunkOpen}
-            trunkOpen={s.trunkOpen}
-            showComponents={engineering || s.showComponents}
-            exploded={s.exploded}
-            selected={s.selected}
-            onSelect={(id) => s.set({ selected: id })}
-            flow={s.flow}
-            motors={motors}
-            lowDetail={lowPower}
-            // Cabin lamps only when inside (or a door is open), as in a parked car.
-            cabinLight={s.view === "interior" || s.doorsOpen ? s.cabinLight : "off"}
-          />
+          {showAsset ? (
+            // The procedural car stays on screen until the GLB is ready, and replaces it if the download fails.
+            <SceneErrorBoundary fallback={procedural}>
+              <Suspense fallback={procedural}>
+                <GlbVehicle asset={asset} length={layout.L} paint={s.paint} />
+              </Suspense>
+            </SceneErrorBoundary>
+          ) : (
+            procedural
+          )}
         </group>
       </Swap>
       <CameraRig
@@ -119,3 +138,4 @@ function Swap({ target, shown, onSwap, reduced, children }: { target: BodyGeomet
   });
   return <group ref={ref}>{children}</group>;
 }
+

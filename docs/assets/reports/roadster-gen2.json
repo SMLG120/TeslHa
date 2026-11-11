@@ -1,0 +1,636 @@
+{
+  "source": "tesla_roadster.glb",
+  "options": {
+    "rules": "roadster-gen2.json",
+    "length": 4.4,
+    "forward": "-z",
+    "maxTexture": 2048,
+    "simplify": null,
+    "webp": true,
+    "meshopt": true
+  },
+  "before": {
+    "bytes": 7436804,
+    "sha256": "b683c15ea2269dc4bc5522647d2244d9a97c920f1f0604b61b7b7ce095670192",
+    "nodes": 51,
+    "meshes": 49,
+    "drawPrimitives": 49,
+    "triangles": 175504,
+    "materials": [
+      "Cupper1Mtl",
+      "Hub1Mtl",
+      "Meshesmeshesbodyshell0071Mtl",
+      "Meshesmeshesbodyshell1Mtl",
+      "Meshesmeshesboot11Mtl",
+      "Meshesmeshesbrakelight1Mtl",
+      "Meshesmeshesbrakelightm1Mtl",
+      "Meshesmesheschassis0031Mtl",
+      "Meshesmesheschassis0061Mtl",
+      "Meshesmesheschassis0101Mtl",
+      "Meshesmesheschassis1Mtl",
+      "Meshesmeshesdoorlf0031Mtl",
+      "Meshesmeshesdoorrf0021Mtl",
+      "Meshesmeshesdoorrf0031Mtl",
+      "Meshesmeshesheadglass1Mtl",
+      "Meshesmeshesheadlight0011Mtl",
+      "Meshesmeshesheadlight0021Mtl",
+      "Meshesmeshesheadlight1Mtl",
+      "Meshesmeshesindicatorlf1Mtl",
+      "Meshesmeshesindicatorrf1Mtl",
+      "Meshesmeshesmisca1Mtl",
+      "Meshesmeshesmiscb1Mtl",
+      "Meshesmeshesmovsteer10011Mtl",
+      "Meshesmeshesmovsteer101Mtl",
+      "Meshesmeshesscoop11Mtl",
+      "Meshesmeshesspoiler1231Mtl",
+      "Meshesmesheswheel00211Mtl",
+      "Meshesmesheswheel00311Mtl",
+      "Meshesmesheswheel0051Mtl",
+      "Meshesmesheswheel11Mtl",
+      "Meshesmesheswindowlf1Mtl",
+      "Meshesmesheswindowlr1Mtl",
+      "Meshesmesheswindowrf1Mtl",
+      "Meshesmesheswindowrr1Mtl",
+      "Meshesmesheswindscreen11Mtl",
+      "Meshesmesheswindscreenr1Mtl",
+      "Paint1Mtl",
+      "Paint2Mtl",
+      "Springtop1Mtl",
+      "Upperarm1Mtl",
+      "Upperarmb1Mtl"
+    ],
+    "textures": [
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 61239
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 51141
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 78
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 73
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 278990
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 596
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 277627
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 209924
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 61239
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 51141
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          512,
+          256
+        ],
+        "bytes": 44774
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 93423
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 78
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 73
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 27587
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 83
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 27587
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 61239
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 51141
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 73
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 73
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 73
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 73
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 27587
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          128,
+          128
+        ],
+        "bytes": 3089
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          128,
+          128
+        ],
+        "bytes": 1663
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 56272
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 51597
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 45206
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 15290
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 18063
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      },
+      {
+        "name": "",
+        "mime": "image/png",
+        "size": [
+          4,
+          4
+        ],
+        "bytes": 68
+      }
+    ],
+    "animations": 0,
+    "extensionsUsed": [
+      "KHR_materials_clearcoat",
+      "KHR_materials_emissive_strength"
+    ],
+    "bounds": {
+      "min": [
+        -18.1231,
+        0.001,
+        -15.6452
+      ],
+      "max": [
+        -9.4096,
+        5.2631,
+        4.1588
+      ],
+      "size": [
+        8.7135,
+        5.2621,
+        19.804
+      ]
+    }
+  },
+  "after": {
+    "file": "public/models/roadster-gen2.be6da01a.glb",
+    "bytes": 2023964,
+    "sha256": "be6da01a76e30ba86fffb4cfc53274bda85b6f013b0996a08fe4294567e253c1",
+    "nodes": 68,
+    "meshes": 49,
+    "drawPrimitives": 49,
+    "triangles": 175504,
+    "materials": [
+      "Cupper1Mtl",
+      "Hub1Mtl",
+      "Meshesmeshesbodyshell0071Mtl",
+      "Meshesmeshesbodyshell1Mtl",
+      "Meshesmeshesboot11Mtl",
+      "Meshesmeshesbrakelight1Mtl",
+      "Meshesmesheschassis0031Mtl",
+      "Meshesmesheschassis0061Mtl",
+      "Meshesmesheschassis0101Mtl",
+      "Meshesmeshesdoorlf0031Mtl",
+      "Meshesmeshesdoorrf0021Mtl",
+      "Meshesmeshesdoorrf0031Mtl",
+      "Meshesmeshesheadglass1Mtl",
+      "Meshesmeshesheadlight0011Mtl",
+      "Meshesmeshesheadlight1Mtl",
+      "Meshesmeshesindicatorlf1Mtl",
+      "Meshesmeshesmisca1Mtl",
+      "Meshesmeshesmiscb1Mtl",
+      "Meshesmeshesmovsteer10011Mtl",
+      "Meshesmeshesmovsteer101Mtl",
+      "Meshesmeshesscoop11Mtl",
+      "Meshesmeshesspoiler1231Mtl",
+      "Meshesmesheswheel00211Mtl",
+      "Meshesmesheswheel00311Mtl",
+      "Meshesmesheswheel0051Mtl",
+      "Meshesmesheswheel11Mtl",
+      "Meshesmesheswindowlf1Mtl",
+      "Meshesmesheswindowrr1Mtl",
+      "Meshesmesheswindscreenr1Mtl",
+      "Paint1Mtl",
+      "Paint2Mtl",
+      "Springtop1Mtl",
+      "Upperarm1Mtl",
+      "Upperarmb1Mtl"
+    ],
+    "textures": [
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 33482
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 11794
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 272044
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 52622
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 4798
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          512,
+          256
+        ],
+        "bytes": 6542
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 23466
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 1380
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          128,
+          128
+        ],
+        "bytes": 2246
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          128,
+          128
+        ],
+        "bytes": 1176
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 8262
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 20938
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 6312
+      },
+      {
+        "name": "",
+        "mime": "image/webp",
+        "size": [
+          256,
+          256
+        ],
+        "bytes": 3498
+      }
+    ],
+    "animations": 0,
+    "extensionsUsed": [
+      "KHR_materials_clearcoat",
+      "KHR_materials_emissive_strength",
+      "EXT_texture_webp",
+      "KHR_mesh_quantization",
+      "EXT_meshopt_compression"
+    ],
+    "bounds": {
+      "min": [
+        -2.2,
+        0,
+        -0.9679
+      ],
+      "max": [
+        2.2,
+        1.1691,
+        0.9679
+      ],
+      "size": [
+        4.4,
+        1.169,
+        1.9358
+      ]
+    }
+  }
+}

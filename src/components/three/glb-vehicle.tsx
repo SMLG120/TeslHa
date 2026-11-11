@@ -4,25 +4,26 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
 import { PAINTS, type PaintId } from "@/stores/studio";
+import { ASSET_URL_PATTERN, type VehicleAsset } from "@/types/asset";
 
-/** The exported Roadster's nose points along -Z. TeslHa vehicles face +X. */
-const YAW_TO_FORWARD = -Math.PI / 2;
-const BODY_PAINT_MATERIAL = "Paint1Mtl";
-/** The export's glass is mint-tinted mirror metal, which turns into an opaque teal sheet under the studio softbox. */
-const GLASS_MATERIAL = /^Meshesmeshes(window|windscreen)/;
+/** The source glass is mint-tinted mirror metal, which turns into an opaque teal sheet under the studio softbox. */
+const GLASS_TINT = "#3a4248";
 
 /**
- * A licensed GLB placed in the vehicle frame: nose on +X, centred on the origin, wheels on the
- * floor, scaled so its length matches the dataset. Materials are cloned because useGLTF caches the
- * source scene, and repainting must not leak into it.
+ * A licensed GLB from the asset manifest. scripts/assets/prepare-glb.mjs has already put it in the
+ * vehicle frame (nose +X, metres, centred, wheels on the floor) and tagged paint and glass meshes
+ * with a `role` (glTF extras → userData), so nothing here is asset-specific.
+ * Materials are cloned because useGLTF caches the source scene, and repainting must not leak into it.
+ * Only manifest URLs are accepted; the meshopt decoder needs 'wasm-unsafe-eval' in the CSP.
  */
-export function GlbVehicle({ url, length, paint }: { url: string; length: number; paint: PaintId }) {
-  const { scene } = useGLTF(url, false, false);
+export function GlbVehicle({ asset, length, paint }: { asset: VehicleAsset; length: number; paint: PaintId }) {
+  if (!ASSET_URL_PATTERN.test(asset.url)) throw new Error(`Refusing to load unmanaged asset URL: ${asset.url}`);
+  const { scene } = useGLTF(asset.url, false, true);
 
-  const { model, offset, scale, bodyPaint, materials } = useMemo(() => {
+  const { model, scale, paintMaterials, materials } = useMemo(() => {
     const model = scene.clone(true);
     const clones = new Map<THREE.Material, THREE.Material>();
-    let bodyPaint: THREE.MeshStandardMaterial | null = null;
+    const paintMaterials = new Set<THREE.MeshStandardMaterial>();
     model.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -31,32 +32,32 @@ export function GlbVehicle({ url, length, paint }: { url: string; length: number
       clones.set(source, material);
       mesh.material = material;
       mesh.castShadow = !material.transparent;
-      if (GLASS_MATERIAL.test(material.name)) {
+      const role = mesh.userData.role as string | undefined;
+      if (role === "glass") {
         const glass = material as THREE.MeshStandardMaterial;
-        glass.color.set("#3a4248");
+        glass.color.set(GLASS_TINT);
+        glass.transparent = true;
         glass.opacity = 0.3;
+        glass.depthWrite = false;
+        mesh.castShadow = false;
       }
-      if (material.name === BODY_PAINT_MATERIAL) bodyPaint = material as THREE.MeshStandardMaterial;
+      if (role === "paint") paintMaterials.add(material as THREE.MeshStandardMaterial);
     });
+    // The pipeline already scaled to the dataset length; this only absorbs a later dataset correction.
     const box = new THREE.Box3().setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    const offset: [number, number, number] = [-center.x, -box.min.y, -center.z];
-    return { model, offset, scale: length / (box.max.z - box.min.z), bodyPaint: bodyPaint as THREE.MeshStandardMaterial | null, materials: [...clones.values()] };
+    return { model, scale: length / (box.max.x - box.min.x), paintMaterials: [...paintMaterials], materials: [...clones.values()] };
   }, [scene, length]);
 
   useEffect(() => {
-    if (!bodyPaint) return;
     const p = PAINTS.find((x) => x.id === paint) ?? PAINTS[0];
-    bodyPaint.color.set(p.color);
-    bodyPaint.metalness = p.metalness;
-    bodyPaint.roughness = p.roughness;
-  }, [bodyPaint, paint]);
+    for (const m of paintMaterials) {
+      m.color.set(p.color);
+      m.metalness = p.metalness;
+      m.roughness = p.roughness;
+    }
+  }, [paintMaterials, paint]);
 
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
 
-  return (
-    <group rotation-y={YAW_TO_FORWARD} scale={scale}>
-      <primitive object={model} position={offset} />
-    </group>
-  );
+  return <primitive object={model} scale={scale} />;
 }

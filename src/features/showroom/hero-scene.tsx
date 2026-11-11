@@ -29,7 +29,8 @@ export default function HeroScene({ vehicleId, paint, lowPower, reducedMotion, o
   const body = bodyFor(family, family.id === "roadster" ? "gen2" : undefined);
   const layout = useMemo(() => computeLayout(body), [body]);
   const wide = useMediaQuery("(min-width: 1024px)");
-  const assetUrl = family.asset?.url;
+  const asset = family.asset;
+  const assetUrl = asset?.url;
   // The detailed model is the page's centrepiece: frame it so it clears the headline at every turntable angle.
   const frame = useMemo(() => (assetUrl && wide ? { ...layout, L: layout.L * 1.5, W: layout.L } : layout), [assetUrl, wide, layout]);
   const procedural = <ProceduralVehicle body={body} paint={paint} headlights lowDetail={lowPower} />;
@@ -51,7 +52,7 @@ export default function HeroScene({ vehicleId, paint, lowPower, reducedMotion, o
         {assetUrl ? (
           // No local Suspense: the preloader stays up until the model is ready. A failed download falls back to the procedural car.
           <SceneErrorBoundary fallback={procedural}>
-            <GlbVehicle url={assetUrl} length={layout.L} paint={paint} />
+            <GlbVehicle asset={asset!} length={layout.L} paint={paint} />
           </SceneErrorBoundary>
         ) : (
           procedural

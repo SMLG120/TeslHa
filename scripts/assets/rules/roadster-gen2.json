@@ -1,0 +1,20 @@
+{
+  "$comment": "Material-name rules for 'Tesla Roadster' by GT Cars (CC BY 4.0). First match wins; groups are semantic paths under VehicleRoot. Groups describe what the source geometry is, nothing is invented. 'Meshesmeshesmisca/miscb' are the door mirrors (outboard of the doors at mirror height).",
+  "rules": [
+    { "match": "^Paint1Mtl$", "group": "Exterior/Body", "role": "paint" },
+    { "match": "^Paint2Mtl$", "group": "Exterior/Body" },
+    { "match": "bodyshell|boot|scoop|spoiler", "group": "Exterior/Body" },
+    { "match": "^Meshesmeshesmisc[ab]", "group": "Exterior/Mirrors" },
+    { "match": "windscreen|window|headglass", "group": "Exterior/Glass", "role": "glass" },
+    { "match": "headlight|indicator", "group": "Exterior/Headlights" },
+    { "match": "brakelight", "group": "Exterior/Taillights" },
+    { "match": "doorlf", "group": "Doors/FrontLeft" },
+    { "match": "doorrf0031", "group": "Doors/FrontRight" },
+    { "match": "doorrf0021", "group": "Interior/Trim" },
+    { "match": "movsteer", "group": "Interior/SteeringSystem" },
+    { "match": "chassis0101|chassis0061", "group": "Interior/Tub" },
+    { "match": "chassis", "group": "Exterior/Underbody" },
+    { "match": "wheel|Hub|Cupper", "group": "Wheels/All" },
+    { "match": "Springtop|Upperarm", "group": "Chassis/Suspension" }
+  ]
+}
